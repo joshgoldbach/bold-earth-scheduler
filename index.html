@@ -130,6 +130,11 @@
   .master-status.none { background:#f9fafb; border-color:#e5e7eb; }
   .master-badge { background:#057a55; color:white; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:10px; flex-shrink:0; }
   .master-unsaved { background:#fffbeb; border-color:#fcd34d; }
+  #new-version-banner { margin-bottom: 0; }
+  .new-version-bar { background:#fef3c7; border:1px solid #fcd34d; border-radius:6px; padding:10px 16px; display:flex; align-items:center; gap:12px; font-size:0.85rem; }
+  .audit-entry { font-size:0.78rem; color:#666; padding:3px 0; border-bottom:1px solid #f3f4f6; display:flex; gap:8px; }
+  .audit-entry:last-child { border-bottom:none; }
+  .audit-who { font-weight:700; color:#333; }
 
   /* Time-off request card */
   .timeoff-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #f0f0f0; font-size: 0.82rem; }
@@ -292,9 +297,13 @@
       <span style="color:#888;font-size:0.82rem">No master schedule published yet. Generate a schedule and click "Publish as Master".</span>
     </div>
     <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-success" id="publish-master-btn" onclick="publishMaster()" disabled>📌 Publish as Master</button>
+      <button class="btn btn-success" id="publish-master-btn" onclick="publishAsMaster()" disabled>📌 Publish as Master</button>
       <button class="btn btn-primary"   id="save-changes-btn"  onclick="saveChangesToMaster()" style="display:none" disabled>💾 Save Changes to Master</button>
       <button class="btn btn-secondary" onclick="loadMaster()" style="font-size:0.8rem">↺ Reload from Master</button>
+    </div>
+    <div id="audit-log" style="margin-top:14px;display:none">
+      <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-bottom:6px">Recent Activity</p>
+      <div id="audit-log-list"></div>
     </div>
   </div>
 
@@ -331,6 +340,11 @@
       <button class="btn btn-success"   id="export-btn"   onclick="exportCSV()"         disabled>↓ Export CSV</button>
       <button class="btn btn-secondary" id="sheets-btn"   onclick="copyForSheets()"     disabled>📋 Copy for Sheets</button>
       <button class="btn btn-secondary" id="pdf-btn"      onclick="exportPDF()"         disabled>🖨 Print / PDF</button>
+      <div class="field" style="margin-bottom:0">
+        <select id="view-filter" onchange="setViewFilter(this.value)" style="border:1px solid #d0d5dd;border-radius:6px;padding:7px 10px;font-size:0.85rem;outline:none;">
+          <option value="">👥 Full Team View</option>
+        </select>
+      </div>
       <div class="spacer"></div>
       <div class="legend">
         <span style="font-size:0.75rem;font-weight:700;color:#555">Shifts:</span>
@@ -613,6 +627,12 @@ function changeName() {
 let masterLoaded = false;   // true when current schedule came from master
 let hasUnsavedChanges = false;
 let lastMasterData = null;  // last published master metadata (for status display)
+let masterUnsubscribe = null; // Firestore onSnapshot unsubscribe handle
+
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', e => {
+  if (hasUnsavedChanges) { e.preventDefault(); e.returnValue = ''; }
+});
 
 function updateMasterStatus(data) {
   const el = document.getElementById('master-status');
@@ -621,14 +641,14 @@ function updateMasterStatus(data) {
     el.innerHTML = '<span style="color:#888;font-size:0.82rem">No master schedule published yet. Generate a schedule and click "Publish as Master".</span>';
     return;
   }
-  const saved = new Date(data.savedAt).toLocaleString('en-US',
-    { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  const saved = data.savedAt ? new Date(data.savedAt).toLocaleString('en-US',
+    { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
   const byLine = data.savedBy ? ` by <strong>${data.savedBy}</strong>` : '';
   el.className = 'master-status' + (hasUnsavedChanges ? ' master-unsaved' : '');
   el.innerHTML = `
     <span class="master-badge">${hasUnsavedChanges ? 'UNSAVED' : 'LIVE'}</span>
     <span style="font-size:0.85rem"><strong>${fmtDate(data.startDate)} – ${fmtDate(data.endDate)}</strong>
-    &nbsp;·&nbsp; Last saved${byLine} &nbsp;${saved}</span>
+    &nbsp;·&nbsp; Last saved${byLine}${saved ? ' &nbsp;' + saved : ''}</span>
   `;
 }
 
@@ -639,7 +659,55 @@ function updateSaveChangesBtn() {
   btn.disabled = !hasUnsavedChanges;
 }
 
+function renderAuditLog(log) {
+  const wrap = document.getElementById('audit-log');
+  const list = document.getElementById('audit-log-list');
+  if (!log || !log.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  list.innerHTML = [...log].reverse().map(e => {
+    const t = new Date(e.savedAt).toLocaleString('en-US',
+      { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    return `<div class="audit-entry">
+      <span class="audit-who">${e.savedBy || 'Unknown'}</span>
+      <span>${e.action}</span>
+      <span style="margin-left:auto;color:#aaa">${t}</span>
+    </div>`;
+  }).join('');
+}
+
+function showNewVersionBanner(data) {
+  // Don't show if this user just saved it
+  if (data.savedBy === getCurrentUser()) return;
+  let banner = document.getElementById('new-version-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'new-version-banner';
+    const main = document.querySelector('main');
+    main.insertBefore(banner, main.firstChild);
+  }
+  const by = data.savedBy ? ` by <strong>${data.savedBy}</strong>` : '';
+  banner.innerHTML = `<div class="new-version-bar">
+    <span>🔄 The master schedule was just updated${by}.</span>
+    <button class="btn btn-primary" style="padding:4px 12px;font-size:0.78rem" onclick="loadMaster()">Reload Now</button>
+    <button onclick="document.getElementById('new-version-banner').remove()" style="background:none;border:none;cursor:pointer;color:#999;margin-left:auto;font-size:1rem">✕</button>
+  </div>`;
+}
+
+function startMasterListener() {
+  if (masterUnsubscribe) masterUnsubscribe();
+  masterUnsubscribe = db.collection('schedules').doc('master').onSnapshot(snap => {
+    if (!snap.exists || !lastMasterData) return;
+    const data = snap.data();
+    if (data.savedAt > lastMasterData.savedAt) {
+      showNewVersionBanner(data);
+    }
+  });
+}
+
 async function loadMaster() {
+  // Remove stale banner if reloading
+  const banner = document.getElementById('new-version-banner');
+  if (banner) banner.remove();
   try {
     const snap = await db.collection('schedules').doc('master').get();
     if (!snap.exists) { updateMasterStatus(null); return; }
@@ -662,22 +730,32 @@ async function loadMaster() {
     lastMasterData = data;
     updateMasterStatus(data);
     updateSaveChangesBtn();
+    renderAuditLog(data.auditLog);
+    startMasterListener();
     toast('Master schedule loaded — live for the whole team.');
   } catch(e) {
     console.error('loadMaster failed:', e);
   }
 }
 
-async function publishMaster() {
+async function publishMaster(requireConfirm) {
   if (!schedule.length) { toast('Generate a schedule first.', true); return; }
+  if (requireConfirm && lastMasterData) {
+    const by = lastMasterData.savedBy ? ` (last saved by ${lastMasterData.savedBy})` : '';
+    if (!confirm(`This will replace the current master schedule${by}.\n\nAre you sure?`)) return;
+  }
   try {
+    const entry = { savedAt: new Date().toISOString(), savedBy: getCurrentUser() || 'Unknown', action: requireConfirm ? 'Published new schedule' : 'Saved changes' };
+    const existingLog = lastMasterData?.auditLog || [];
+    const auditLog = [...existingLog, entry].slice(-10);
     const data = {
-      savedAt:   new Date().toISOString(),
-      savedBy:   getCurrentUser() || 'Unknown',
+      savedAt:   entry.savedAt,
+      savedBy:   entry.savedBy,
       startDate: document.getElementById('start-date').value,
       endDate:   document.getElementById('end-date').value,
       days,
       schedule,
+      auditLog,
     };
     await db.collection('schedules').doc('master').set(data);
     masterLoaded = true;
@@ -685,15 +763,18 @@ async function publishMaster() {
     lastMasterData = data;
     updateMasterStatus(data);
     updateSaveChangesBtn();
-    toast('Published as master schedule — your whole team can now see it.');
+    renderAuditLog(auditLog);
+    toast(requireConfirm ? 'Published as master — your whole team can now see it.' : 'Changes saved to master.');
   } catch(e) {
-    toast('Publish failed: ' + e.message, true);
+    toast('Save failed: ' + e.message, true);
   }
 }
 
+function publishAsMaster() { publishMaster(true); }
+
 async function saveChangesToMaster() {
   if (!schedule.length) { toast('No schedule to save.', true); return; }
-  await publishMaster();
+  await publishMaster(false);
 }
 
 // ============================================================
@@ -1313,13 +1394,24 @@ function coverageGaps(asgn) {
 }
 
 // ============================================================
+// VIEW FILTER (My Schedule)
+// ============================================================
+let scheduleFilter = null; // null = full team, string = single person name
+
+function setViewFilter(val) {
+  scheduleFilter = val || null;
+  renderTable();
+}
+
+// ============================================================
 // RENDER TABLE
 // ============================================================
 function renderTable() {
   const tbl = document.getElementById('schedule-table');
+  const visibleNames = scheduleFilter ? NAMES.filter(n => n === scheduleFilter) : NAMES;
   let html = '<thead><tr>';
   html += '<th class="col-date">Date</th><th class="col-day">Day</th>';
-  NAMES.forEach(n => {
+  visibleNames.forEach(n => {
     const tz = TEAM.find(p=>p.name===n).tz;
     html += `<th>${n}<small>${tz}</small></th>`;
   });
@@ -1336,7 +1428,7 @@ function renderTable() {
 
     // Pre-season rows: show ON/OFF/lock, no shift dropdowns
     if (day.preseason) {
-      NAMES.forEach(n => {
+      visibleNames.forEach(n => {
         const h = day.assignments[n];
         const reqOff = isRequestedOff(n, day.date);
         if (h === 'ON') {
@@ -1358,7 +1450,7 @@ function renderTable() {
       return;
     }
 
-    NAMES.forEach(n => {
+    visibleNames.forEach(n => {
       const h       = day.assignments[n];         // null = OFF, number = start hour
       const reqOff  = isRequestedOff(n, day.date);
       const onTrain = isTraining(n, day.date);
@@ -1627,10 +1719,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const sel = document.getElementById('to-person');
   const trSel = document.getElementById('tr-person');
   const nameSel = document.getElementById('name-select');
+  const viewSel = document.getElementById('view-filter');
   NAMES.forEach(n => {
     const o1 = document.createElement('option'); o1.value = o1.textContent = n; sel.appendChild(o1);
     const o2 = document.createElement('option'); o2.value = o2.textContent = n; trSel.appendChild(o2);
     const o3 = document.createElement('option'); o3.value = o3.textContent = n; nameSel.appendChild(o3);
+    const o4 = document.createElement('option'); o4.value = n; o4.textContent = `👤 ${n} only`; viewSel.appendChild(o4);
   });
   // Show name prompt if first visit, otherwise greet
   if (!getCurrentUser()) {
