@@ -345,6 +345,12 @@
           <option value="">👥 Full Team View</option>
         </select>
       </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <select id="cal-person" style="border:1px solid #d0d5dd;border-radius:6px;padding:7px 10px;font-size:0.85rem;outline:none;">
+          <option value="">Person…</option>
+        </select>
+        <button class="btn btn-secondary" id="cal-btn" onclick="exportCalendarForSelected()" disabled>📅 Export to Calendar</button>
+      </div>
       <div class="spacer"></div>
       <div class="legend">
         <span style="font-size:0.75rem;font-weight:700;color:#555">Shifts:</span>
@@ -724,6 +730,7 @@ async function loadMaster() {
     document.getElementById('export-btn').disabled   = false;
     document.getElementById('sheets-btn').disabled   = false;
     document.getElementById('pdf-btn').disabled      = false;
+    document.getElementById('cal-btn').disabled       = false;
     document.getElementById('validation-out').innerHTML = '';
     masterLoaded = true;
     hasUnsavedChanges = false;
@@ -1368,6 +1375,7 @@ function generateSchedule() {
   document.getElementById('export-btn').disabled   = false;
   document.getElementById('sheets-btn').disabled   = false;
   document.getElementById('pdf-btn').disabled      = false;
+  document.getElementById('cal-btn').disabled       = false;
   document.getElementById('publish-master-btn').disabled = false;
   document.getElementById('validation-out').innerHTML = '';
   masterLoaded = false;
@@ -1654,6 +1662,99 @@ function validateSchedule() {
 }
 
 // ============================================================
+// EXPORT — GOOGLE CALENDAR (.ics)
+// ============================================================
+// All shift hours in the schedule are ET. Summer 2026 = EDT (UTC-4).
+const EDT_UTC_OFFSET = 4;
+
+function toICSDateTime(dateStr, hourET) {
+  const d = parseDateStr(dateStr);
+  const utcH = hourET + EDT_UTC_OFFSET;
+  const extraDays = Math.floor(utcH / 24);
+  const finalH = utcH % 24;
+  d.setDate(d.getDate() + extraDays);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(finalH)}0000Z`;
+}
+
+function toICSDate(dateStr) {
+  const d = parseDateStr(dateStr);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+}
+
+function exportCalendar(name) {
+  if (!schedule.length) { toast('Load or generate a schedule first.', true); return; }
+  const events = [];
+
+  schedule.forEach(day => {
+    const h = day.assignments[name];
+    if (h === null || h === 'TRAIN') return; // off or training — skip
+
+    if (h === 'ON') {
+      // Pre-season weekday — all-day event
+      const d = parseDateStr(day.date);
+      const next = new Date(d); next.setDate(next.getDate() + 1);
+      const pad = n => String(n).padStart(2, '0');
+      const nextStr = `${next.getFullYear()}${pad(next.getMonth()+1)}${pad(next.getDate())}`;
+      events.push([
+        'BEGIN:VEVENT',
+        `DTSTART;VALUE=DATE:${toICSDate(day.date)}`,
+        `DTEND;VALUE=DATE:${nextStr}`,
+        `SUMMARY:DS Work Day (Pre-season)`,
+        `DESCRIPTION:Bold Earth / ARCC Director Support – pre-season work day.`,
+        `UID:boldearth-${name}-${day.date}-pre@scheduler`,
+        'END:VEVENT',
+      ].join('\r\n'));
+      return;
+    }
+
+    // Main-season timed shift
+    const isOC = day.onCall === name;
+    const start = toICSDateTime(day.date, h);
+    const end   = toICSDateTime(day.date, h + SHIFT_LEN);
+    const title = isOC ? `DS Shift ${SHIFT_LABEL[h]} ET ☎ On-Call` : `DS Shift ${SHIFT_LABEL[h]} ET`;
+    const desc  = isOC
+      ? `Bold Earth / ARCC Director Support – ${SHIFT_LABEL[h]} start. On-call tonight until 8 PM ET.`
+      : `Bold Earth / ARCC Director Support – ${SHIFT_LABEL[h]} start.`;
+    events.push([
+      'BEGIN:VEVENT',
+      `DTSTART:${start}`,
+      `DTEND:${end}`,
+      `SUMMARY:${title}`,
+      `DESCRIPTION:${desc}`,
+      `UID:boldearth-${name}-${day.date}@scheduler`,
+      'END:VEVENT',
+    ].join('\r\n'));
+  });
+
+  if (!events.length) { toast(`No shifts found for ${name}.`, true); return; }
+
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Bold Earth Scheduler//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:${name} – Bold Earth 2026`,
+    ...events,
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
+  a.download = `${name}_BoldEarth_2026.ics`;
+  a.click();
+  toast(`Downloaded ${name}'s calendar — open the file to import into Google Calendar, Apple Calendar, or Outlook.`);
+}
+
+function exportCalendarForSelected() {
+  const name = document.getElementById('cal-person').value;
+  if (!name) { toast('Select a person first.', true); return; }
+  exportCalendar(name);
+}
+
+// ============================================================
 // EXPORT CSV
 // ============================================================
 function fmtAssignment(h) {
@@ -1720,12 +1821,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const trSel = document.getElementById('tr-person');
   const nameSel = document.getElementById('name-select');
   const viewSel = document.getElementById('view-filter');
+  const calSel  = document.getElementById('cal-person');
   NAMES.forEach(n => {
     const o1 = document.createElement('option'); o1.value = o1.textContent = n; sel.appendChild(o1);
     const o2 = document.createElement('option'); o2.value = o2.textContent = n; trSel.appendChild(o2);
     const o3 = document.createElement('option'); o3.value = o3.textContent = n; nameSel.appendChild(o3);
     const o4 = document.createElement('option'); o4.value = n; o4.textContent = `👤 ${n} only`; viewSel.appendChild(o4);
+    const o5 = document.createElement('option'); o5.value = o5.textContent = n; calSel.appendChild(o5);
   });
+  // Pre-select current user in calendar export dropdown
+  const me = getCurrentUser();
+  if (me && NAMES.includes(me)) calSel.value = me;
   // Show name prompt if first visit, otherwise greet
   if (!getCurrentUser()) {
     document.getElementById('name-modal').style.display = 'flex';
