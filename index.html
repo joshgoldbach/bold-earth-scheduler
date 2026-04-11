@@ -125,10 +125,11 @@
 
   .hidden { display: none !important; }
 
-  /* Saved schedules */
-  .save-item { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f0f0f0; gap:12px; }
-  .save-item:last-child { border-bottom:none; }
-  .save-meta { display:block; font-size:0.75rem; color:#888; margin-top:2px; }
+  /* Master schedule status */
+  .master-status { background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:10px 16px; display:flex; align-items:center; gap:12px; font-size:0.85rem; }
+  .master-status.none { background:#f9fafb; border-color:#e5e7eb; }
+  .master-badge { background:#057a55; color:white; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:10px; flex-shrink:0; }
+  .master-unsaved { background:#fffbeb; border-color:#fcd34d; }
 
   /* Time-off request card */
   .timeoff-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #f0f0f0; font-size: 0.82rem; }
@@ -268,17 +269,17 @@
     </div>
   </div>
 
-  <!-- SAVED SCHEDULES -->
+  <!-- MASTER SCHEDULE -->
   <div class="card" id="saves-card">
-    <h2>Saved Schedules</h2>
-    <div class="settings-row" style="margin-bottom:14px">
-      <div class="field" style="flex:1;min-width:220px">
-        <label>Save Name</label>
-        <input type="text" id="save-name" placeholder="e.g. Draft v1, Final, Emily week off…" style="width:100%">
-      </div>
-      <button class="btn btn-success" onclick="saveSchedule()">💾 Save Current Schedule</button>
+    <h2>Master Schedule <span style="font-size:0.72rem;font-weight:400;color:#888;text-transform:none;letter-spacing:0">— the single live schedule your whole team works from</span></h2>
+    <div id="master-status" class="master-status none">
+      <span style="color:#888;font-size:0.82rem">No master schedule published yet. Generate a schedule and click "Publish as Master".</span>
     </div>
-    <div id="save-list"><p style="color:#888;font-size:0.8rem">No saved schedules yet.</p></div>
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-success" id="publish-master-btn" onclick="publishMaster()" disabled>📌 Publish as Master</button>
+      <button class="btn btn-primary"   id="save-changes-btn"  onclick="saveChangesToMaster()" style="display:none" disabled>💾 Save Changes to Master</button>
+      <button class="btn btn-secondary" onclick="loadMaster()" style="font-size:0.8rem">↺ Reload from Master</button>
+    </div>
   </div>
 
   <!-- RULES REFERENCE -->
@@ -564,34 +565,40 @@ function renderTrainingList() {
 }
 
 // ============================================================
-// SAVE / LOAD (Firebase Firestore — shared across all users)
+// MASTER SCHEDULE (Firebase Firestore — single shared doc)
 // ============================================================
-async function saveSchedule() {
-  if (!schedule.length) { toast('Generate a schedule first.', true); return; }
-  const nameEl = document.getElementById('save-name');
-  const name   = nameEl.value.trim() ||
-    `Schedule ${new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}`;
-  try {
-    await db.collection('schedules').add({
-      name,
-      savedAt:   new Date().toISOString(),
-      startDate: document.getElementById('start-date').value,
-      endDate:   document.getElementById('end-date').value,
-      days,
-      schedule,
-    });
-    nameEl.value = '';
-    renderSaveList();
-    toast(`Saved "${name}" — visible to your whole team.`);
-  } catch(e) {
-    toast('Save failed: ' + e.message, true);
+let masterLoaded = false;   // true when current schedule came from master
+let hasUnsavedChanges = false;
+let lastMasterData = null;  // last published master metadata (for status display)
+
+function updateMasterStatus(data) {
+  const el = document.getElementById('master-status');
+  if (!data) {
+    el.className = 'master-status none';
+    el.innerHTML = '<span style="color:#888;font-size:0.82rem">No master schedule published yet. Generate a schedule and click "Publish as Master".</span>';
+    return;
   }
+  const saved = new Date(data.savedAt).toLocaleString('en-US',
+    { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  el.className = 'master-status' + (hasUnsavedChanges ? ' master-unsaved' : '');
+  el.innerHTML = `
+    <span class="master-badge">${hasUnsavedChanges ? 'UNSAVED' : 'LIVE'}</span>
+    <span style="font-size:0.85rem"><strong>${fmtDate(data.startDate)} – ${fmtDate(data.endDate)}</strong>
+    &nbsp;·&nbsp; Last published ${saved}</span>
+  `;
 }
 
-async function loadSave(id) {
+function updateSaveChangesBtn() {
+  const btn = document.getElementById('save-changes-btn');
+  if (!btn) return;
+  btn.style.display = masterLoaded ? '' : 'none';
+  btn.disabled = !hasUnsavedChanges;
+}
+
+async function loadMaster() {
   try {
-    const snap = await db.collection('schedules').doc(id).get();
-    if (!snap.exists) { toast('Save not found.', true); return; }
+    const snap = await db.collection('schedules').doc('master').get();
+    if (!snap.exists) { updateMasterStatus(null); return; }
     const data = snap.data();
     days     = data.days;
     schedule = data.schedule;
@@ -601,59 +608,47 @@ async function loadSave(id) {
       .forEach(id => document.getElementById(id).classList.remove('hidden'));
     renderTable();
     renderStats();
-    renderTimeOffList();
     document.getElementById('validate-btn').disabled = false;
     document.getElementById('export-btn').disabled   = false;
     document.getElementById('sheets-btn').disabled   = false;
     document.getElementById('pdf-btn').disabled      = false;
     document.getElementById('validation-out').innerHTML = '';
-    toast(`Loaded "${data.name}"`);
+    masterLoaded = true;
+    hasUnsavedChanges = false;
+    lastMasterData = data;
+    updateMasterStatus(data);
+    updateSaveChangesBtn();
+    toast('Master schedule loaded — live for the whole team.');
   } catch(e) {
-    toast('Load failed: ' + e.message, true);
+    console.error('loadMaster failed:', e);
   }
 }
 
-async function deleteSave(id) {
+async function publishMaster() {
+  if (!schedule.length) { toast('Generate a schedule first.', true); return; }
   try {
-    const snap = await db.collection('schedules').doc(id).get();
-    if (!snap.exists) return;
-    const { name } = snap.data();
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
-    await db.collection('schedules').doc(id).delete();
-    renderSaveList();
-    toast('Save deleted.');
+    const data = {
+      savedAt:   new Date().toISOString(),
+      startDate: document.getElementById('start-date').value,
+      endDate:   document.getElementById('end-date').value,
+      days,
+      schedule,
+    };
+    await db.collection('schedules').doc('master').set(data);
+    masterLoaded = true;
+    hasUnsavedChanges = false;
+    lastMasterData = data;
+    updateMasterStatus(data);
+    updateSaveChangesBtn();
+    toast('Published as master schedule — your whole team can now see it.');
   } catch(e) {
-    toast('Delete failed: ' + e.message, true);
+    toast('Publish failed: ' + e.message, true);
   }
 }
 
-async function renderSaveList() {
-  const el = document.getElementById('save-list');
-  el.innerHTML = '<p style="color:#888;font-size:0.8rem">Loading saved schedules…</p>';
-  try {
-    const snapshot = await db.collection('schedules').orderBy('savedAt', 'desc').get();
-    if (snapshot.empty) {
-      el.innerHTML = '<p style="color:#888;font-size:0.8rem">No saved schedules yet.</p>';
-      return;
-    }
-    el.innerHTML = snapshot.docs.map(doc => {
-      const data  = doc.data();
-      const saved = new Date(data.savedAt).toLocaleDateString('en-US',
-        { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' });
-      return `<div class="save-item">
-        <div>
-          <strong>${data.name}</strong>
-          <span class="save-meta">${fmtDate(data.startDate)} – ${fmtDate(data.endDate)} &nbsp;·&nbsp; Saved ${saved}</span>
-        </div>
-        <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn btn-primary"   style="padding:4px 12px;font-size:0.78rem" onclick="loadSave('${doc.id}')">Load</button>
-          <button class="btn btn-secondary" style="padding:4px 12px;font-size:0.78rem" onclick="deleteSave('${doc.id}')">Delete</button>
-        </div>
-      </div>`;
-    }).join('');
-  } catch(e) {
-    el.innerHTML = `<p style="color:#dc2626;font-size:0.8rem">Error loading saves: ${e.message}</p>`;
-  }
+async function saveChangesToMaster() {
+  if (!schedule.length) { toast('No schedule to save.', true); return; }
+  await publishMaster();
 }
 
 // ============================================================
@@ -1247,7 +1242,11 @@ function generateSchedule() {
   document.getElementById('export-btn').disabled   = false;
   document.getElementById('sheets-btn').disabled   = false;
   document.getElementById('pdf-btn').disabled      = false;
+  document.getElementById('publish-master-btn').disabled = false;
   document.getElementById('validation-out').innerHTML = '';
+  masterLoaded = false;
+  hasUnsavedChanges = false;
+  updateSaveChangesBtn();
   toast(`Schedule generated: ${preDays.length} pre-season + ${mainDays.length} main-season days.`);
 }
 
@@ -1352,16 +1351,25 @@ function renderTable() {
 
 function cellChange(di, name, val) {
   schedule[di].assignments[name] = val === 'OFF' ? null : +val;
-  // Recheck coverage
   const gaps = coverageGaps(schedule[di].assignments);
   schedule[di].coverageOK = gaps.length === 0;
   schedule[di].notes = gaps.length ? `Gap: ${gaps.map(h=>h<12?h+'AM':h===12?'12PM':(h-12)+'PM').join(', ')}` : '';
   renderTable();
   renderStats();
+  if (masterLoaded) {
+    hasUnsavedChanges = true;
+    updateMasterStatus(lastMasterData);
+    updateSaveChangesBtn();
+  }
 }
 
 function ocChange(di, val) {
   schedule[di].onCall = val || null;
+  if (masterLoaded) {
+    hasUnsavedChanges = true;
+    updateMasterStatus(lastMasterData);
+    updateSaveChangesBtn();
+  }
 }
 
 // ============================================================
@@ -1582,8 +1590,8 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTimeOffList();
   loadTrainingFromStorage();
   renderTrainingList();
-  // Render any existing saves
-  renderSaveList();
+  // Auto-load the master schedule from Firestore
+  loadMaster();
 });
 
 let _tt;
