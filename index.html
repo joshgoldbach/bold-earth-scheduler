@@ -186,6 +186,31 @@
 
   /* Time-off markers in col-date */
   .marker { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 4px; vertical-align: middle; }
+
+  /* Card view (mobile / My Schedule) */
+  .week-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .week-nav span { font-weight:700; font-size:0.9rem; }
+  .day-cards-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:10px; }
+  .day-card { border-radius:8px; padding:12px 10px; border:1px solid #e5e7eb; text-align:center; min-width:0; }
+  .day-card.wknd { background:#f5f6fa; }
+  .day-card.off  { background:#f9fafb; opacity:0.6; }
+  .day-card.train { background:#fef3c7; border-color:#fcd34d; }
+  .day-card .dc-dow  { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#999; }
+  .day-card .dc-date { font-size:0.78rem; color:#555; margin:2px 0 8px; }
+  .day-card .dc-shift { font-size:1rem; font-weight:800; margin:4px 0; }
+  .day-card .dc-oc   { font-size:0.68rem; font-weight:700; color:#b45309; background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; padding:2px 6px; display:inline-block; margin-top:4px; }
+  .dc-s8  { color:#c05621; } .dc-s9 { color:#276749; } .dc-s10 { color:#1a56db; } .dc-s12 { color:#9d174d; }
+  .day-card .dc-off-label { font-size:0.78rem; color:#bbb; font-weight:600; }
+  .card-view-person { display:flex; align-items:center; gap:10px; margin-bottom:14px; font-size:0.85rem; }
+
+  @media (max-width: 700px) {
+    main { padding: 10px; gap: 10px; }
+    .day-cards-grid { grid-template-columns: repeat(2, 1fr); }
+    #schedule-card, #stats-card, #weekend-card, #rules-card { display: none !important; }
+    #card-view-card { display: block !important; }
+    .controls-row { gap: 6px; }
+    .legend { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -297,9 +322,10 @@
       <span style="color:#888;font-size:0.82rem">No master schedule published yet. Generate a schedule and click "Publish as Master".</span>
     </div>
     <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-success" id="publish-master-btn" onclick="publishAsMaster()" disabled>📌 Publish as Master</button>
-      <button class="btn btn-primary"   id="save-changes-btn"  onclick="saveChangesToMaster()" style="display:none" disabled>💾 Save Changes to Master</button>
-      <button class="btn btn-secondary" onclick="loadMaster()" style="font-size:0.8rem">↺ Reload from Master</button>
+      <button class="btn btn-success"   id="publish-master-btn" onclick="publishAsMaster()"      disabled>📌 Publish as Master</button>
+      <button class="btn btn-primary"   id="save-changes-btn"   onclick="saveChangesToMaster()"  style="display:none" disabled>💾 Save Changes to Master</button>
+      <button class="btn btn-secondary" id="undo-save-btn"      onclick="undoLastSave()"         style="display:none">↩ Undo Last Save</button>
+      <button class="btn btn-secondary"                         onclick="loadMaster()"           style="font-size:0.8rem">↺ Reload from Master</button>
     </div>
     <div id="audit-log" style="margin-top:14px;display:none">
       <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-bottom:6px">Recent Activity</p>
@@ -340,6 +366,7 @@
       <button class="btn btn-success"   id="export-btn"   onclick="exportCSV()"         disabled>↓ Export CSV</button>
       <button class="btn btn-secondary" id="sheets-btn"   onclick="copyForSheets()"     disabled>📋 Copy for Sheets</button>
       <button class="btn btn-secondary" id="pdf-btn"      onclick="exportPDF()"         disabled>🖨 Print / PDF</button>
+      <button class="btn btn-secondary" id="card-view-btn" onclick="toggleCardView()"   disabled>📱 Card View</button>
       <div class="field" style="margin-bottom:0">
         <select id="view-filter" onchange="setViewFilter(this.value)" style="border:1px solid #d0d5dd;border-radius:6px;padding:7px 10px;font-size:0.85rem;outline:none;">
           <option value="">👥 Full Team View</option>
@@ -364,6 +391,21 @@
       </div>
     </div>
     <div id="validation-out"></div>
+  </div>
+
+  <!-- CARD VIEW (mobile / My Schedule) -->
+  <div class="card hidden" id="card-view-card">
+    <div class="card-view-person">
+      <span style="font-weight:700;font-size:0.78rem;text-transform:uppercase;letter-spacing:.06em;color:#666">Viewing:</span>
+      <select id="card-person" onchange="renderCardView()" style="border:1px solid #d0d5dd;border-radius:6px;padding:5px 10px;font-size:0.85rem;outline:none;"></select>
+      <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.78rem" onclick="exportCalendar(document.getElementById('card-person').value)">📅 Export to Calendar</button>
+    </div>
+    <div class="week-nav">
+      <button class="btn btn-secondary" style="padding:5px 12px" onclick="prevWeek()">← Prev</button>
+      <span id="week-label"></span>
+      <button class="btn btn-secondary" style="padding:5px 12px" onclick="nextWeek()">Next →</button>
+    </div>
+    <div id="day-cards-grid" class="day-cards-grid"></div>
   </div>
 
   <!-- SCHEDULE GRID -->
@@ -730,13 +772,15 @@ async function loadMaster() {
     document.getElementById('export-btn').disabled   = false;
     document.getElementById('sheets-btn').disabled   = false;
     document.getElementById('pdf-btn').disabled      = false;
-    document.getElementById('cal-btn').disabled       = false;
+    document.getElementById('cal-btn').disabled        = false;
+    document.getElementById('card-view-btn').disabled  = false;
     document.getElementById('validation-out').innerHTML = '';
     masterLoaded = true;
     hasUnsavedChanges = false;
     lastMasterData = data;
     updateMasterStatus(data);
     updateSaveChangesBtn();
+    updateUndoBtn();
     renderAuditLog(data.auditLog);
     startMasterListener();
     toast('Master schedule loaded — live for the whole team.');
@@ -755,6 +799,8 @@ async function publishMaster(requireConfirm) {
     const entry = { savedAt: new Date().toISOString(), savedBy: getCurrentUser() || 'Unknown', action: requireConfirm ? 'Published new schedule' : 'Saved changes' };
     const existingLog = lastMasterData?.auditLog || [];
     const auditLog = [...existingLog, entry].slice(-10);
+    // Store previous version for undo (strip its own previousVersion to avoid deep nesting)
+    const previousVersion = lastMasterData ? { ...lastMasterData, previousVersion: null } : null;
     const data = {
       savedAt:   entry.savedAt,
       savedBy:   entry.savedBy,
@@ -763,6 +809,7 @@ async function publishMaster(requireConfirm) {
       days,
       schedule,
       auditLog,
+      previousVersion,
     };
     await db.collection('schedules').doc('master').set(data);
     masterLoaded = true;
@@ -770,6 +817,7 @@ async function publishMaster(requireConfirm) {
     lastMasterData = data;
     updateMasterStatus(data);
     updateSaveChangesBtn();
+    updateUndoBtn();
     renderAuditLog(auditLog);
     toast(requireConfirm ? 'Published as master — your whole team can now see it.' : 'Changes saved to master.');
   } catch(e) {
@@ -1375,7 +1423,8 @@ function generateSchedule() {
   document.getElementById('export-btn').disabled   = false;
   document.getElementById('sheets-btn').disabled   = false;
   document.getElementById('pdf-btn').disabled      = false;
-  document.getElementById('cal-btn').disabled       = false;
+  document.getElementById('cal-btn').disabled           = false;
+  document.getElementById('card-view-btn').disabled      = false;
   document.getElementById('publish-master-btn').disabled = false;
   document.getElementById('validation-out').innerHTML = '';
   masterLoaded = false;
@@ -1810,6 +1859,166 @@ function exportPDF() {
 }
 
 // ============================================================
+// UNDO LAST SAVE
+// ============================================================
+async function undoLastSave() {
+  if (!lastMasterData?.previousVersion) { toast('No previous version to restore.', true); return; }
+  const prev = lastMasterData.previousVersion;
+  const by = prev.savedBy ? ` (saved by ${prev.savedBy})` : '';
+  const t  = prev.savedAt ? new Date(prev.savedAt).toLocaleString('en-US',
+    { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+  if (!confirm(`Restore the previous version${by}${t ? ' from ' + t : ''}?\n\nThis will undo the last save.`)) return;
+  try {
+    await db.collection('schedules').doc('master').set(prev);
+    await loadMaster();
+    toast('Restored previous version.');
+  } catch(e) {
+    toast('Restore failed: ' + e.message, true);
+  }
+}
+
+function updateUndoBtn() {
+  const btn = document.getElementById('undo-save-btn');
+  if (btn) btn.style.display = lastMasterData?.previousVersion ? '' : 'none';
+}
+
+// ============================================================
+// CARD VIEW (mobile / My Schedule)
+// ============================================================
+let cardViewActive = false;
+let currentWeekStart = null; // Monday of the displayed week (YYYY-MM-DD)
+
+function toggleCardView() {
+  cardViewActive = !cardViewActive;
+  const card = document.getElementById('card-view-card');
+  const btn  = document.getElementById('card-view-btn');
+  if (cardViewActive) {
+    card.classList.remove('hidden');
+    btn.textContent = '📋 Table View';
+    initCardView();
+  } else {
+    card.classList.add('hidden');
+    btn.textContent = '📱 Card View';
+  }
+}
+
+function initCardView() {
+  // Default to first non-preseason week
+  const firstMain = schedule.find(d => !d.preseason);
+  if (!firstMain) return;
+  currentWeekStart = getMondayOf(firstMain.date);
+  // Pre-select current user
+  const cardPerson = document.getElementById('card-person');
+  const me = getCurrentUser();
+  if (me && NAMES.includes(me)) cardPerson.value = me;
+  renderCardView();
+}
+
+function getMondayOf(dateStr) {
+  const d = parseDateStr(dateStr);
+  const day = d.getDay(); // 0=Sun, 1=Mon...
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function addDays(dateStr, n) {
+  const d = parseDateStr(dateStr);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function prevWeek() {
+  currentWeekStart = addDays(currentWeekStart, -7);
+  renderCardView();
+}
+
+function nextWeek() {
+  currentWeekStart = addDays(currentWeekStart, 7);
+  renderCardView();
+}
+
+function renderCardView() {
+  if (!schedule.length || !currentWeekStart) return;
+  const name = document.getElementById('card-person').value;
+
+  // Build the 7-day window Mon–Sun
+  const weekDates = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
+  const weekEnd   = weekDates[6];
+
+  // Week label
+  const d0 = parseDateStr(currentWeekStart), d6 = parseDateStr(weekEnd);
+  const fmt = d => d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+  document.getElementById('week-label').textContent = `${fmt(d0)} – ${fmt(d6)}`;
+
+  // Build a lookup for quick access
+  const byDate = Object.fromEntries(schedule.map(d => [d.date, d]));
+
+  const SHIFT_COLOR = { 8:'dc-s8', 9:'dc-s9', 10:'dc-s10', 12:'dc-s12' };
+
+  const grid = document.getElementById('day-cards-grid');
+  grid.innerHTML = weekDates.map(date => {
+    const day = byDate[date];
+    const isWeekend = isWknd(date);
+    const d = parseDateStr(date);
+    const dayName = DOW[d.getDay()];
+    const dateLabel = `${d.getMonth()+1}/${d.getDate()}`;
+
+    if (!day) {
+      return `<div class="day-card${isWeekend?' wknd':''} off">
+        <div class="dc-dow">${dayName}</div>
+        <div class="dc-date">${dateLabel}</div>
+        <div class="dc-off-label">—</div>
+      </div>`;
+    }
+
+    const h = name ? day.assignments[name] : null;
+    const isOC = name ? day.onCall === name : false;
+
+    // Pre-season
+    if (day.preseason) {
+      const label = h === 'ON' ? 'ON' : h === 'TRAIN' ? 'TRAIN' : 'OFF';
+      const cardClass = h === 'TRAIN' ? 'train' : h === null ? 'off' : '';
+      return `<div class="day-card${isWeekend?' wknd':''} ${cardClass}">
+        <div class="dc-dow">${dayName}</div>
+        <div class="dc-date">${dateLabel}</div>
+        <div class="dc-shift" style="font-size:0.85rem;color:#6d28d9">${label}</div>
+        <div style="font-size:0.65rem;color:#888;margin-top:4px">Pre-season</div>
+      </div>`;
+    }
+
+    if (!name) {
+      // No person selected — show how many working
+      const count = NAMES.filter(n => day.assignments[n] !== null).length;
+      return `<div class="day-card${isWeekend?' wknd':''}">
+        <div class="dc-dow">${dayName}</div>
+        <div class="dc-date">${dateLabel}</div>
+        <div class="dc-shift" style="font-size:0.85rem;color:#555">${count} working</div>
+        ${day.onCall ? `<div class="dc-oc">☎ ${day.onCall}</div>` : ''}
+      </div>`;
+    }
+
+    if (h === null) {
+      return `<div class="day-card${isWeekend?' wknd':''} off">
+        <div class="dc-dow">${dayName}</div>
+        <div class="dc-date">${dateLabel}</div>
+        <div class="dc-off-label">OFF</div>
+      </div>`;
+    }
+
+    const colorCls = typeof h === 'number' ? SHIFT_COLOR[h] : '';
+    const shiftLabel = typeof h === 'number' ? SHIFT_LABEL[h] : h;
+
+    return `<div class="day-card${isWeekend?' wknd':''}">
+      <div class="dc-dow">${dayName}</div>
+      <div class="dc-date">${dateLabel}</div>
+      <div class="dc-shift ${colorCls}">${shiftLabel}</div>
+      ${isOC ? '<div class="dc-oc">☎ On-Call</div>' : ''}
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
 // TOAST
 // ============================================================
 // Set default dates on page load
@@ -1822,16 +2031,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const nameSel = document.getElementById('name-select');
   const viewSel = document.getElementById('view-filter');
   const calSel  = document.getElementById('cal-person');
+  const cardSel = document.getElementById('card-person');
   NAMES.forEach(n => {
     const o1 = document.createElement('option'); o1.value = o1.textContent = n; sel.appendChild(o1);
     const o2 = document.createElement('option'); o2.value = o2.textContent = n; trSel.appendChild(o2);
     const o3 = document.createElement('option'); o3.value = o3.textContent = n; nameSel.appendChild(o3);
     const o4 = document.createElement('option'); o4.value = n; o4.textContent = `👤 ${n} only`; viewSel.appendChild(o4);
     const o5 = document.createElement('option'); o5.value = o5.textContent = n; calSel.appendChild(o5);
+    const o6 = document.createElement('option'); o6.value = o6.textContent = n; cardSel.appendChild(o6);
   });
-  // Pre-select current user in calendar export dropdown
+  // Pre-select current user in calendar + card view dropdowns
   const me = getCurrentUser();
-  if (me && NAMES.includes(me)) calSel.value = me;
+  if (me && NAMES.includes(me)) { calSel.value = me; cardSel.value = me; }
   // Show name prompt if first visit, otherwise greet
   if (!getCurrentUser()) {
     document.getElementById('name-modal').style.display = 'flex';
