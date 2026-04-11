@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bold Earth / ARCC Scheduler</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #222; font-size: 14px; }
+
+  header {
+    background: #1a56db; color: white; padding: 14px 24px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  header h1 { font-size: 1.1rem; font-weight: 600; }
+  header span { font-size: 0.8rem; opacity: 0.7; margin-left: 8px; }
+
+  main { max-width: 1500px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+  .card { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); padding: 18px 22px; }
+  .card h2 { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #666; margin-bottom: 14px; }
+
+  /* Settings */
+  .settings-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 0.72rem; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: .04em; }
+  .field input, .field select {
+    border: 1px solid #d0d5dd; border-radius: 6px; padding: 7px 10px;
+    font-size: 0.88rem; outline: none;
+  }
+  .field input:focus, .field select:focus { border-color: #1a56db; box-shadow: 0 0 0 3px #1a56db22; }
+
+  /* Buttons */
+  .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+  .btn-primary  { background: #1a56db; color: white; }
+  .btn-primary:hover  { background: #1648c0; }
+  .btn-secondary { background: #e5e7eb; color: #333; }
+  .btn-secondary:hover { background: #d1d5db; }
+  .btn-success  { background: #057a55; color: white; }
+  .btn-success:hover  { background: #046c4e; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Controls bar */
+  .controls-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .spacer { flex: 1; }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.75rem; align-items: center; }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 2px; border: 1px solid rgba(0,0,0,.1); }
+
+  /* Schedule table */
+  .table-scroll { overflow-x: auto; }
+  #schedule-table { border-collapse: collapse; font-size: 0.8rem; min-width: 100%; }
+
+  #schedule-table th {
+    background: #1a56db; color: white; padding: 8px 10px;
+    text-align: center; white-space: nowrap; font-weight: 600;
+    position: sticky; top: 0; z-index: 2;
+  }
+  #schedule-table th.col-date, #schedule-table th.col-day { text-align: left; }
+
+  #schedule-table td {
+    padding: 3px 5px; border-bottom: 1px solid #eee;
+    text-align: center; white-space: nowrap;
+  }
+  #schedule-table td.col-date { font-weight: 600; text-align: left; padding-left: 10px; }
+  #schedule-table td.col-day  { color: #777; text-align: left; padding-left: 6px; min-width: 38px; }
+
+  /* Weekend rows */
+  #schedule-table tr.weekend td.col-date,
+  #schedule-table tr.weekend td.col-day { background: #f5f6fa; }
+
+  /* Pre-season rows */
+  #schedule-table tr.preseason td { background: #f5f0ff !important; color: #888; }
+  #schedule-table tr.preseason td.col-date { color: #6d28d9; font-weight: 700; background: #ede9fe !important; }
+  #schedule-table tr.preseason td.col-day  { background: #ede9fe !important; }
+  #schedule-table tr.preseason td.col-oncall { background: #ddd6fe !important; color: #4c1d95; font-weight: 700; }
+  .preseason-cov { color: #6d28d9; font-weight: 700; font-size: 0.72rem; text-align: center; }
+  td.sON    { background: #d1fae5; }  /* pre-season ON = soft green */
+  td.sTRAIN { background: #fef3c7; }  /* training = amber */
+
+  /* Shift cell colors */
+  td.s8   { background: #fce5cd; }
+  td.s9   { background: #d9ead3; }
+  td.s10  { background: #d0e4f7; }
+  td.s12  { background: #ead1dc; }
+  td.sOFF { background: #f3f3f3; }
+
+  /* Shift dropdown inside cell */
+  .shift-sel {
+    border: none; border-radius: 4px; padding: 4px 2px;
+    font-size: 0.78rem; font-weight: 600; cursor: pointer;
+    outline: none; background: transparent; width: 86px;
+    text-align: center;
+  }
+  .shift-sel:focus { box-shadow: 0 0 0 2px #1a56db55; border-radius: 4px; }
+
+  /* On-call column */
+  td.col-oncall { background: #fff9e6; font-weight: 700; min-width: 90px; }
+  .oncall-sel {
+    border: none; background: transparent; font-weight: 700;
+    font-size: 0.8rem; cursor: pointer; outline: none; width: 100%;
+    text-align: center;
+  }
+
+  /* Coverage column */
+  td.cov-ok  { background: #d1fae5; color: #065f46; font-weight: 700; min-width: 72px; }
+  td.cov-bad { background: #fee2e2; color: #991b1b; font-weight: 700; min-width: 72px; }
+
+  /* Notes */
+  td.col-notes { font-size: 0.73rem; text-align: left; padding: 3px 8px; color: #b45309; min-width: 160px; }
+  td.col-notes.has-note { background: #fffbeb; }
+
+  /* Stats */
+  #stats-table, #weekend-table { border-collapse: collapse; font-size: 0.82rem; }
+  #stats-table th, #weekend-table th { background: #f3f4f6; padding: 6px 14px; font-weight: 700; border-bottom: 2px solid #e5e7eb; text-align: center; }
+  #stats-table th:first-child, #weekend-table th:first-child { text-align: left; }
+  #stats-table td, #weekend-table td { padding: 5px 14px; border-bottom: 1px solid #f0f0f0; text-align: center; }
+  #stats-table td:first-child, #weekend-table td:first-child { font-weight: 600; text-align: left; }
+
+  /* Validation */
+  #validation-out { margin-top: 10px; }
+  .v-ok   { color: #057a55; font-weight: 700; font-size: 0.88rem; }
+  .v-fail { color: #dc2626; font-weight: 700; font-size: 0.88rem; }
+  .v-item { font-size: 0.78rem; padding: 4px 8px; background: #fee2e2; border-left: 3px solid #dc2626; margin-top: 3px; border-radius: 0 4px 4px 0; }
+
+  .hidden { display: none !important; }
+
+  /* Saved schedules */
+  .save-item { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f0f0f0; gap:12px; }
+  .save-item:last-child { border-bottom:none; }
+  .save-meta { display:block; font-size:0.75rem; color:#888; margin-top:2px; }
+
+  /* Time-off request card */
+  .timeoff-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #f0f0f0; font-size: 0.82rem; }
+  .timeoff-item:last-child { border-bottom: none; }
+  td.sREQ { background: #ede9fe; }
+  .req-badge { font-size: 0.65rem; font-weight: 700; color: #6d28d9; background: #ede9fe; border: 1px solid #c4b5fd; border-radius: 3px; padding: 1px 4px; margin-left: 4px; vertical-align: middle; }
+
+  /* Print / PDF */
+  @media print {
+    @page { size: landscape; margin: 12mm; }
+    body { background: white; font-size: 11px; }
+    header { background: #1a56db !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 8px 16px; }
+    #settings-card, #timeoff-card, #saves-card, #rules-card, #controls-card, #weekend-card { display: none !important; }
+    main { padding: 8px; gap: 10px; }
+    .card { box-shadow: none; border: 1px solid #e5e7eb; padding: 10px 14px; }
+    .card h2 { margin-bottom: 8px; }
+    #schedule-table td, #schedule-table th { padding: 2px 4px; font-size: 10px; }
+    .shift-sel, .oncall-sel { appearance: none; border: none; background: transparent; font-size: 10px; font-weight: 600; pointer-events: none; width: auto; }
+    td.s8, td.s9, td.s10, td.s12, td.sOFF, td.sREQ, td.col-oncall, td.cov-ok, td.cov-bad { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .btn, select.oncall-sel option { display: none; }
+    .oncall-sel { pointer-events: none; }
+    #stats-table td, #stats-table th { padding: 3px 8px; font-size: 11px; }
+    .print-hide { display: none !important; }
+  }
+
+  /* Rules table */
+  .rules-table { border-collapse: collapse; font-size: 0.82rem; width: 100%; }
+  .rules-table th { background: #f3f4f6; padding: 6px 14px; font-weight: 700; border-bottom: 2px solid #e5e7eb; text-align: left; }
+  .rules-table td { padding: 5px 14px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  .rules-table td:first-child { font-weight: 700; white-space: nowrap; }
+  .rules-table td:nth-child(2) { white-space: nowrap; font-size: 0.75rem; font-weight: 600; }
+  .rule-hard td:nth-child(2) { color: #dc2626; }
+  .rule-soft td:nth-child(2) { color: #b45309; }
+  .rule-fair td:nth-child(2) { color: #1a56db; }
+  .rule-hard { background: #fff5f5; }
+  .rule-soft { background: #fffbeb; }
+  .rule-fair { background: #f0f4ff; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 20px; right: 20px; background: #1a56db; color: white;
+    padding: 9px 16px; border-radius: 7px; font-size: 0.85rem; font-weight: 500;
+    box-shadow: 0 4px 14px rgba(0,0,0,.2); z-index: 999; transition: opacity .3s;
+  }
+  .toast.err { background: #dc2626; }
+
+  /* Sub-label in header row */
+  #schedule-table th small { display: block; font-size: 0.65rem; opacity: .75; font-weight: 400; }
+
+  /* Time-off markers in col-date */
+  .marker { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 4px; vertical-align: middle; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Bold Earth / ARCC Director Support Scheduler
+      <span>8 AM – 8 PM ET · 9-hr shifts · 7 days/week</span>
+    </h1>
+  </div>
+</header>
+
+<main>
+
+  <!-- SETTINGS -->
+  <div class="card">
+    <h2>Settings</h2>
+    <div class="settings-row">
+      <div class="field">
+        <label>Start Date</label>
+        <input type="date" id="start-date" value="2026-05-19">
+      </div>
+      <div class="field">
+        <label>End Date</label>
+        <input type="date" id="end-date" value="2026-08-10">
+      </div>
+      <div class="field">
+        <label>Max Staff / Day</label>
+        <select id="max-staff">
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7" selected>7</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="initAndGenerate()">Generate Schedule →</button>
+    </div>
+  </div>
+
+  <!-- TRAINING BLOCKS -->
+  <div class="card" id="training-card">
+    <h2>Training Blocks <span style="font-size:0.72rem;font-weight:400;color:#888;text-transform:none;letter-spacing:0">— person is unavailable; shows as TRAIN on schedule</span></h2>
+    <div class="settings-row">
+      <div class="field">
+        <label>Person</label>
+        <select id="tr-person">
+          <option value="">Select person…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>From</label>
+        <input type="date" id="tr-start">
+      </div>
+      <div class="field">
+        <label>To</label>
+        <input type="date" id="tr-end">
+      </div>
+      <button class="btn btn-secondary" onclick="addTraining()">+ Add Training Block</button>
+    </div>
+    <div id="training-list" style="margin-top:12px">
+      <p style="color:#888;font-size:0.8rem">No training blocks added.</p>
+    </div>
+  </div>
+
+  <!-- TIME-OFF REQUESTS -->
+  <div class="card" id="timeoff-card">
+    <h2>Time-Off Requests</h2>
+    <div class="settings-row">
+      <div class="field">
+        <label>Person</label>
+        <select id="to-person">
+          <option value="">Select person…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>From</label>
+        <input type="date" id="to-start">
+      </div>
+      <div class="field">
+        <label>To (leave blank for single day)</label>
+        <input type="date" id="to-end">
+      </div>
+      <button class="btn btn-secondary" onclick="addTimeOff()">+ Add Request</button>
+    </div>
+    <div id="timeoff-list" style="margin-top:12px">
+      <p style="color:#888;font-size:0.8rem">No requests added.</p>
+    </div>
+  </div>
+
+  <!-- SAVED SCHEDULES -->
+  <div class="card" id="saves-card">
+    <h2>Saved Schedules</h2>
+    <div class="settings-row" style="margin-bottom:14px">
+      <div class="field" style="flex:1;min-width:220px">
+        <label>Save Name</label>
+        <input type="text" id="save-name" placeholder="e.g. Draft v1, Final, Emily week off…" style="width:100%">
+      </div>
+      <button class="btn btn-success" onclick="saveSchedule()">💾 Save Current Schedule</button>
+    </div>
+    <div id="save-list"><p style="color:#888;font-size:0.8rem">No saved schedules yet.</p></div>
+  </div>
+
+  <!-- RULES REFERENCE -->
+  <div class="card" id="rules-card">
+    <h2>Rules Reference</h2>
+    <table class="rules-table">
+      <thead>
+        <tr><th>ID</th><th>Priority</th><th>Rule</th></tr>
+      </thead>
+      <tbody>
+        <tr class="rule-hard"><td>R1</td><td>Hard</td><td>Min 2 people scheduled every day, including weekends</td></tr>
+        <tr class="rule-hard"><td>R2</td><td>Hard</td><td>Post on-call: next working day must start at 10 AM ET or later</td></tr>
+        <tr class="rule-hard"><td>R3</td><td>Hard</td><td>On-call shift must not be immediately followed by a day off</td></tr>
+        <tr class="rule-hard"><td>R4</td><td>Hard</td><td>Max 2 people scheduled on any Saturday or Sunday</td></tr>
+        <tr class="rule-hard"><td>R5</td><td>Hard</td><td>Every person must have exactly 13–14 days off in the period</td></tr>
+        <tr class="rule-soft"><td>R6</td><td>Soft</td><td>Max 2 consecutive on-call nights per person</td></tr>
+        <tr class="rule-soft"><td>R7</td><td>Soft</td><td>Max 2 consecutive days off per person</td></tr>
+        <tr class="rule-soft"><td>R8</td><td>Soft</td><td>Max 5 consecutive working days (one exception per person per period as last resort)</td></tr>
+        <tr class="rule-soft"><td>R9</td><td>Soft</td><td>On-call assignment should have a valid next-day swap candidate; fall back to bumping start to 10 AM</td></tr>
+        <tr class="rule-soft"><td>R10</td><td>Soft</td><td>On-call person should not start at 8 or 9 AM the same day they are on call</td></tr>
+        <tr class="rule-fair"><td>F1</td><td>Fairness</td><td>Minimize and evenly distribute weekend days worked across the team</td></tr>
+        <tr class="rule-fair"><td>F2</td><td>Fairness</td><td>Weekend day targets: Ali=3, Emily=3, Josh=5, Izzy=5, Kayla=5, Holly=7, Bryan=7 (Holly &amp; Bryan higher to cover 3rd Saturday worker slots)</td></tr>
+        <tr class="rule-fair"><td>F3</td><td>Fairness</td><td>Josh: max 4 on-call shifts total</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- CONTROLS + LEGEND -->
+  <div class="card hidden" id="controls-card">
+    <div class="controls-row">
+      <button class="btn btn-primary" onclick="generateSchedule()">⚡ Auto-Generate</button>
+      <button class="btn btn-secondary" id="validate-btn" onclick="validateSchedule()" disabled>✓ Validate Rules</button>
+      <button class="btn btn-success"   id="export-btn"   onclick="exportCSV()"         disabled>↓ Export CSV</button>
+      <button class="btn btn-secondary" id="sheets-btn"   onclick="copyForSheets()"     disabled>📋 Copy for Sheets</button>
+      <button class="btn btn-secondary" id="pdf-btn"      onclick="exportPDF()"         disabled>🖨 Print / PDF</button>
+      <div class="spacer"></div>
+      <div class="legend">
+        <span style="font-size:0.75rem;font-weight:700;color:#555">Shifts:</span>
+        <div class="legend-item"><div class="legend-swatch" style="background:#fce5cd"></div>8 AM</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#d9ead3"></div>9 AM</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#d0e4f7"></div>10 AM</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#ead1dc"></div>12 PM</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#f3f3f3"></div>OFF</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#fef3c7;border:1px solid #fcd34d"></div>Training</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#fff9e6;border:1px solid #fde68a"></div>On-Call</div>
+      </div>
+    </div>
+    <div id="validation-out"></div>
+  </div>
+
+  <!-- SCHEDULE GRID -->
+  <div class="card hidden" id="schedule-card">
+    <h2>Schedule
+      <span style="font-weight:400;font-size:0.75rem;color:#888;margin-left:8px;">
+        Click any shift cell to change · On-Call column = who covers evenings
+      </span>
+    </h2>
+    <div class="table-scroll">
+      <table id="schedule-table"></table>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="card hidden" id="stats-card">
+    <h2>Summary Stats</h2>
+    <table id="stats-table"></table>
+  </div>
+
+  <!-- WEEKEND TRACKER -->
+  <div class="card hidden" id="weekend-card">
+    <h2>Weekend Days Tracker</h2>
+    <table id="weekend-table"></table>
+  </div>
+
+</main>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const TEAM = [
+  { name: 'Josh',        tz: 'ET', earliestStartET: 8  },
+  { name: 'Izzy',        tz: 'ET', earliestStartET: 8  },
+  { name: 'Ali',         tz: 'ET', earliestStartET: 8  },
+  { name: 'Kayla',       tz: 'ET', earliestStartET: 8  },
+  { name: 'Holly',       tz: 'MT', earliestStartET: 9  },
+  { name: 'Bryan',       tz: 'PT', earliestStartET: 10 },
+  { name: 'Emily',       tz: 'PT', earliestStartET: 10 },
+  { name: 'Jacqueline',  tz: 'ET', earliestStartET: 9, fixedStartET: 9, weekdayOnly: true, noOnCall: true },
+];
+const NAMES        = TEAM.map(p => p.name);
+const ET_STAFF     = TEAM.filter(p => p.tz === 'ET').map(p => p.name);
+// Staff who only work Mon–Fri at a fixed start time and are never on-call
+const WEEKDAY_ONLY = new Set(TEAM.filter(p => p.weekdayOnly).map(p => p.name));
+const VALID_STARTS = [8, 9, 10, 12];
+const SHIFT_LEN    = 9;
+
+const SHIFT_LABEL = { 8: '8 AM', 9: '9 AM', 10: '10 AM', 12: '12 PM' };
+const SHIFT_CLASS = { 8: 's8',   9: 's9',   10: 's10',   12: 's12'   };
+const PRESEASON_END = '2026-06-24'; // May 19 – Jun 24: pre-season (weekend on-call only, no shift hours)
+
+// ============================================================
+// DATE HELPERS
+// ============================================================
+function parseDateStr(str) {
+  // Parse YYYY-MM-DD as local noon to avoid DST shifts
+  return new Date(str + 'T12:00:00');
+}
+function getDays(startStr, endStr) {
+  const days = [];
+  const end = parseDateStr(endStr);
+  const cur = parseDateStr(startStr);
+  while (cur <= end) {
+    days.push(cur.toISOString().slice(0, 10));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return days;
+}
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+// Weekend preference groups:
+// LOW  = minimize their weekend work (Ali, Josh only — Emily needs 3 weekend days so not minimized)
+// HIGH = primary weekend coverage (Izzy, Kayla, Holly, Bryan, Emily)
+const WKND_LOW = new Set(['Ali', 'Josh']);
+// Hard cap: max weekend days worked per person.
+// Emily/Kayla/Holly/Izzy targeted at 3. Bryan absorbs slack (math: 28 slots - 19 from others = 9 for Bryan).
+// Caps raised to accommodate 3rd Saturday worker (+7 slots): Josh+1, Izzy+1, Kayla+1, Holly+2, Bryan+2. Ali/Emily unchanged.
+const WKND_HARD_CAP = { 'Josh': 5, 'Izzy': 5, 'Ali': 3, 'Kayla': 5, 'Holly': 7, 'Bryan': 7, 'Emily': 3, 'Jacqueline': 0 };
+// Hard cap: max on-call nights per person.
+// Izzy and Kayla capped at 8 so overflow flows to Holly, guaranteeing Holly >= Izzy and Holly >= Bryan.
+const OC_HARD_CAP   = { 'Josh': 4, 'Izzy': 8, 'Ali': 4, 'Kayla': 8, 'Bryan': 9, 'Emily': 4, 'Jacqueline': 0 };
+// R5 carve-out: Josh has a reduced days-off cap (10); Jacqueline weekday-only so 14 off (weekends); others default to 15.
+const MAX_OFF_PER   = { 'Josh': 10, 'Jacqueline': 14 };
+const maxOffFor     = n => MAX_OFF_PER[n] ?? 15;
+function dow(d)      { return DOW[parseDateStr(d).getDay()]; }
+function isWknd(d)   { const day = parseDateStr(d).getDay(); return day === 0 || day === 6; }
+function fmtDate(d)  { const dt = parseDateStr(d); return `${dt.getMonth()+1}/${dt.getDate()}/${dt.getFullYear()}`; }
+
+// ============================================================
+// TIME-OFF REQUESTS
+// ============================================================
+const TIMEOFF_KEY = 'scheduler_timeoff_requests';
+let timeOffRequests = [];
+
+function saveTimeOffToStorage() {
+  localStorage.setItem(TIMEOFF_KEY, JSON.stringify(timeOffRequests));
+}
+
+function loadTimeOffFromStorage() {
+  try {
+    const raw = localStorage.getItem(TIMEOFF_KEY);
+    timeOffRequests = raw ? JSON.parse(raw) : [];
+  } catch(e) { timeOffRequests = []; }
+}
+
+function isRequestedOff(name, date) {
+  return timeOffRequests.some(r => r.name === name && date >= r.start && date <= r.end);
+}
+
+function addTimeOff() {
+  const name  = document.getElementById('to-person').value;
+  const start = document.getElementById('to-start').value;
+  const end   = document.getElementById('to-end').value || start;
+  if (!name)  { toast('Select a person.', true); return; }
+  if (!start) { toast('Enter a start date.', true); return; }
+  if (end < start) { toast('End date must be on or after start date.', true); return; }
+  timeOffRequests.push({ name, start, end });
+  saveTimeOffToStorage();
+  renderTimeOffList();
+  document.getElementById('to-end').value = '';
+  toast(`Time-off added for ${name}. Regenerate the schedule to apply.`);
+}
+
+function removeTimeOff(i) {
+  timeOffRequests.splice(i, 1);
+  saveTimeOffToStorage();
+  renderTimeOffList();
+}
+
+function renderTimeOffList() {
+  const el = document.getElementById('timeoff-list');
+  if (!timeOffRequests.length) {
+    el.innerHTML = '<p style="color:#888;font-size:0.8rem">No requests added.</p>';
+    return;
+  }
+  el.innerHTML = timeOffRequests.map((r, i) => {
+    const range = r.end !== r.start ? `${fmtDate(r.start)} → ${fmtDate(r.end)}` : fmtDate(r.start);
+    return `<div class="timeoff-item">
+      <strong>${r.name}</strong>: ${range}
+      <button class="btn btn-secondary" style="padding:2px 8px;font-size:0.75rem" onclick="removeTimeOff(${i})">✕ Remove</button>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// TRAINING BLOCKS
+// ============================================================
+const TRAINING_KEY = 'scheduler_training_requests';
+// Default training blocks (seeded on first load when the key doesn't exist in localStorage)
+const DEFAULT_TRAINING = [
+  { name: 'Holly', start: '2026-06-15', end: '2026-06-25' },
+  { name: 'Izzy',  start: '2026-06-15', end: '2026-06-25' },
+  { name: 'Kayla', start: '2026-06-15', end: '2026-06-25' },
+  { name: 'Bryan', start: '2026-06-11', end: '2026-06-19' },
+  { name: 'Emily', start: '2026-06-11', end: '2026-06-19' },
+  { name: 'Ali',   start: '2026-06-11', end: '2026-06-19' },
+];
+let trainingRequests = [];
+
+function saveTrainingToStorage() {
+  localStorage.setItem(TRAINING_KEY, JSON.stringify(trainingRequests));
+}
+
+function loadTrainingFromStorage() {
+  const raw = localStorage.getItem(TRAINING_KEY);
+  if (raw === null) {
+    // First load: seed with default training blocks
+    trainingRequests = [...DEFAULT_TRAINING];
+    saveTrainingToStorage();
+  } else {
+    try { trainingRequests = JSON.parse(raw); } catch(e) { trainingRequests = []; }
+  }
+}
+
+function isTraining(name, date) {
+  return trainingRequests.some(r => r.name === name && date >= r.start && date <= r.end);
+}
+
+function addTraining() {
+  const name  = document.getElementById('tr-person').value;
+  const start = document.getElementById('tr-start').value;
+  const end   = document.getElementById('tr-end').value || start;
+  if (!name)  { toast('Select a person.', true); return; }
+  if (!start) { toast('Enter a start date.', true); return; }
+  if (end < start) { toast('End date must be on or after start date.', true); return; }
+  trainingRequests.push({ name, start, end });
+  saveTrainingToStorage();
+  renderTrainingList();
+  document.getElementById('tr-end').value = '';
+  toast(`Training block added for ${name}. Regenerate the schedule to apply.`);
+}
+
+function removeTraining(i) {
+  trainingRequests.splice(i, 1);
+  saveTrainingToStorage();
+  renderTrainingList();
+}
+
+function renderTrainingList() {
+  const el = document.getElementById('training-list');
+  if (!trainingRequests.length) {
+    el.innerHTML = '<p style="color:#888;font-size:0.8rem">No training blocks added.</p>';
+    return;
+  }
+  el.innerHTML = trainingRequests.map((r, i) => {
+    const range = r.end !== r.start ? `${fmtDate(r.start)} → ${fmtDate(r.end)}` : fmtDate(r.start);
+    return `<div class="timeoff-item">
+      <span style="background:#fef3c7;border:1px solid #fcd34d;border-radius:3px;font-size:0.7rem;font-weight:700;color:#92400e;padding:1px 5px;margin-right:4px">TRAIN</span>
+      <strong>${r.name}</strong>: ${range}
+      <button class="btn btn-secondary" style="padding:2px 8px;font-size:0.75rem" onclick="removeTraining(${i})">✕ Remove</button>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// SAVE / LOAD (localStorage)
+// ============================================================
+const SAVE_PREFIX = 'scheduler_save_';
+
+function saveSchedule() {
+  if (!schedule.length) { toast('Generate a schedule first.', true); return; }
+  const nameEl = document.getElementById('save-name');
+  const name   = nameEl.value.trim() ||
+    `Schedule ${new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}`;
+  const key  = SAVE_PREFIX + Date.now();
+  const data = {
+    name,
+    savedAt:        new Date().toISOString(),
+    startDate:      document.getElementById('start-date').value,
+    endDate:        document.getElementById('end-date').value,
+    days,
+    schedule,
+    timeOffRequests
+  };
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch(e) {
+    toast('Save failed — localStorage may be full.', true); return;
+  }
+  nameEl.value = '';
+  renderSaveList();
+  toast(`Saved "${name}"`);
+}
+
+function loadSave(key) {
+  const raw = localStorage.getItem(key);
+  if (!raw) { toast('Save not found.', true); return; }
+  const data = JSON.parse(raw);
+  days     = data.days;
+  schedule = data.schedule;
+  // Keep current time-off requests (stored in localStorage) rather than the save's snapshot.
+  document.getElementById('start-date').value = data.startDate;
+  document.getElementById('end-date').value   = data.endDate;
+  ['controls-card','schedule-card','stats-card','weekend-card']
+    .forEach(id => document.getElementById(id).classList.remove('hidden'));
+  renderTable();
+  renderStats();
+  renderTimeOffList();
+  document.getElementById('validate-btn').disabled = false;
+  document.getElementById('export-btn').disabled   = false;
+  document.getElementById('sheets-btn').disabled   = false;
+  document.getElementById('pdf-btn').disabled      = false;
+  document.getElementById('validation-out').innerHTML = '';
+  toast(`Loaded "${data.name}"`);
+}
+
+function deleteSave(key) {
+  const raw = localStorage.getItem(key);
+  if (!raw) return;
+  const { name } = JSON.parse(raw);
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  localStorage.removeItem(key);
+  renderSaveList();
+  toast('Save deleted.');
+}
+
+function renderSaveList() {
+  const el   = document.getElementById('save-list');
+  const keys = Object.keys(localStorage)
+    .filter(k => k.startsWith(SAVE_PREFIX))
+    .sort().reverse();            // newest first
+  if (!keys.length) {
+    el.innerHTML = '<p style="color:#888;font-size:0.8rem">No saved schedules yet.</p>';
+    return;
+  }
+  el.innerHTML = keys.map(key => {
+    const data  = JSON.parse(localStorage.getItem(key));
+    const saved = new Date(data.savedAt).toLocaleDateString('en-US',
+      { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    return `<div class="save-item">
+      <div>
+        <strong>${data.name}</strong>
+        <span class="save-meta">${fmtDate(data.startDate)} – ${fmtDate(data.endDate)} &nbsp;·&nbsp; Saved ${saved}</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn btn-primary"   style="padding:4px 12px;font-size:0.78rem" onclick="loadSave('${key}')">Load</button>
+        <button class="btn btn-secondary" style="padding:4px 12px;font-size:0.78rem" onclick="deleteSave('${key}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// STATE
+// ============================================================
+let days = [];          // YYYY-MM-DD strings
+let schedule = [];      // array of { date, assignments:{name->hour|null}, onCall:name|null, coverageOK, notes }
+
+// ============================================================
+// INIT GRID + AUTO-GENERATE
+// ============================================================
+function initAndGenerate() {
+  const s = document.getElementById('start-date').value;
+  const e = document.getElementById('end-date').value;
+  if (!s || !e)  { toast('Enter start and end dates.', true); return; }
+  if (s > e)     { toast('Start must be before end.', true); return; }
+
+  days = getDays(s, e);
+  document.getElementById('controls-card').classList.remove('hidden');
+  document.getElementById('schedule-card').classList.remove('hidden');
+  document.getElementById('stats-card').classList.remove('hidden');
+  document.getElementById('weekend-card').classList.remove('hidden');
+
+  generateSchedule();
+}
+
+// ============================================================
+// AUTO-GENERATE SCHEDULE
+// ============================================================
+function generateSchedule() {
+  console.log('Time-off requests at generation time:', JSON.stringify(timeOffRequests));
+  if (timeOffRequests.length) {
+    toast(`Applying ${timeOffRequests.length} time-off request(s) for: ${[...new Set(timeOffRequests.map(r=>r.name))].join(', ')}`);
+  }
+
+  const preDays  = days.filter(d => d <= PRESEASON_END);
+  const mainDays = days.filter(d => d > PRESEASON_END);
+
+  // ---- Pre-season: weekdays everyone ON; weekends 1 on-call person (same Sat+Sun) ----
+  const preOcCount = Object.fromEntries(NAMES.map(n => [n, 0]));
+  let lastWkndOC = null;
+  const preSchedule = preDays.map(date => {
+    const notes = [];
+    const d = dow(date);
+    let onCall = null;
+
+    if (isWknd(date)) {
+      // Weekend: on-call person is ON; training people show TRAIN; everyone else is OFF
+      const assignments = Object.fromEntries(NAMES.map(n => [n, isTraining(n, date) ? 'TRAIN' : null]));
+      const freeForOC = n => !isRequestedOff(n, date) && !isTraining(n, date);
+      if (d === 'Sat') {
+        const elig = NAMES.filter(freeForOC).sort((a, b) => preOcCount[a] - preOcCount[b]);
+        onCall = elig[0] || null;
+        lastWkndOC = onCall;
+        if (onCall) { preOcCount[onCall]++; assignments[onCall] = 'ON'; }
+      } else { // Sun
+        if (lastWkndOC && freeForOC(lastWkndOC)) {
+          onCall = lastWkndOC;
+          assignments[onCall] = 'ON';
+        } else {
+          const elig = NAMES.filter(freeForOC).sort((a, b) => preOcCount[a] - preOcCount[b]);
+          onCall = elig[0] || null;
+          if (onCall) { preOcCount[onCall]++; assignments[onCall] = 'ON'; }
+          if (lastWkndOC) notes.push(`${lastWkndOC} unavailable; ${onCall || 'nobody'} covers Sunday`);
+        }
+      }
+      return { date, assignments, onCall, coverageOK: true, preseason: true, notes: notes.join('; ') };
+    } else {
+      // Weekday: everyone works unless off or at training
+      const assignments = Object.fromEntries(NAMES.map(n => [n,
+        isRequestedOff(n, date) ? null : isTraining(n, date) ? 'TRAIN' : 'ON'
+      ]));
+      return { date, assignments, onCall: null, coverageOK: true, preseason: true, notes: '' };
+    }
+  });
+
+  // ---- Main season (Jun 25 – Aug 10) ----
+  const totalDays = mainDays.length;
+  const workTarget = Object.fromEntries(NAMES.map(n => [n, Math.max(0, totalDays - maxOffFor(n))]));
+
+  // Pre-compute remaining weekend days from each position forward (main season only)
+  const remainingWknd = mainDays.map((_, i) => {
+    let cnt = 0;
+    for (let j = i; j < mainDays.length; j++) if (isWknd(mainDays[j])) cnt++;
+    return cnt;
+  });
+
+  // Per-person weekend targets: use WKND_HARD_CAP directly (all 7 people now have a cap).
+  const totalWkndDays = mainDays.filter(d => isWknd(d)).length;
+  const wkndTarget    = Object.fromEntries(NAMES.map(n => [n, WKND_HARD_CAP[n]]));
+
+  const st = {};
+  NAMES.forEach(n => { st[n] = { consec:0, consecOff:0, wkdayConsecOff:0, totalOff:0, consecOC:0, wasOCLast:false, ocCount:0, starts:{8:0,9:0,10:0,12:0}, total:0, week:0, wkndDays:0 }; });
+
+  const mainSchedule = mainDays.map((date, dayIndex) => {
+    if (dow(date) === 'Mon') NAMES.forEach(n => { st[n].week = 0; });
+
+    const weekend  = isWknd(date);
+    const daysLeft = totalDays - dayIndex;
+    const wkndLeft = remainingWknd[dayIndex];
+
+    // Effective days left per person, accounting for expected weekend offs.
+    // Uses each person's wkndTarget to compute their expected off-weekend days,
+    // which raises weekday urgency for low-weekend-target staff.
+    const effDaysLeft = {};
+    NAMES.forEach(n => {
+      const wkndWorkRate    = totalWkndDays > 0 ? wkndTarget[n] / totalWkndDays : 0;
+      const expectedWkndOff = Math.round(wkndLeft * (1 - wkndWorkRate));
+      effDaysLeft[n] = Math.max(1, daysLeft - expectedWkndOff);
+    });
+
+    // Urgency based on effective days left
+    const urgency = {};
+    NAMES.forEach(n => { urgency[n] = Math.max(0, (workTarget[n] - st[n].total) / effDaysLeft[n]); });
+
+    // Who can work (not at 5-consecutive-day cap).
+    // Bypasses (soft R8 overridden by harder constraints):
+    //  - wasOCLast: R3 (hard) forces next-day work regardless of R8.
+    //  - weekend consec=5 + wkndUrg>0 (non-ET only): exactly at cap, needs weekend days.
+    //    Limited to consec===5 (day-6 only, not day-7+) to prevent multi-day cascades.
+    //    Excluded from OC eligibility (tracked in consecWkndBypassed) to prevent Sunday cascade.
+    const consecWkndBypassed = new Set();
+    const canWork  = NAMES.filter(n => {
+      // Requested day off / training always wins — supercedes all other rules including R3 (wasOCLast)
+      if (isRequestedOff(n, date)) return false;
+      if (isTraining(n, date)) return false;
+      // Weekday-only staff never work weekends
+      if (WEEKDAY_ONLY.has(n) && isWknd(date)) return false;
+      if (st[n].consec < 5) return true;
+      if (st[n].wasOCLast) return true;
+      // Non-ET only: ET staff (Josh/Izzy/Ali/Kayla) have the emergency block for 8 AM coverage.
+      // Restricting bypass to non-ET prevents ET people from being in consecWkndBypassed
+      // (which blocks them from OC), leaving non-bypassed ET as OC and avoiding cascades.
+      if (isWknd(date) && st[n].consec === 5 && !ET_STAFF.includes(n)) {
+        const wkndExp = totalWkndDays > 0 ? remainingWknd[dayIndex] * wkndTarget[n] / totalWkndDays : 0;
+        if (wkndExp > 0 && (wkndTarget[n] - st[n].wkndDays) / wkndExp > 0) {
+          consecWkndBypassed.add(n);
+          return true;
+        }
+      }
+      return false;
+    });
+    // mustWork: force back after 2 consecutive off days.
+    // Weekends: only if they missed weekdays before the weekend (wkdayConsecOff), so normal
+    //   Sat+Sun rest doesn't drag WKND_LOW people onto the weekend.
+    // No urgency-based mustWork on weekdays — urgency sort in fillPool handles that naturally
+    //   and avoids the alternating 1-on/1-off trap when everyone's urgency > threshold.
+    const mustWork = canWork.filter(n =>
+      (weekend ? st[n].wkdayConsecOff >= 2 : st[n].consecOff >= 2) || st[n].wasOCLast
+    );
+
+    // Valid start times per person
+    const vs = {};
+    canWork.forEach(n => {
+      const p = TEAM.find(t => t.name === n);
+      let ok = p.fixedStartET ? [p.fixedStartET] : VALID_STARTS.filter(h => h >= p.earliestStartET);
+      if (st[n].wasOCLast) ok = ok.filter(h => h >= 10);
+      vs[n] = ok;
+    });
+    const workable    = canWork.filter(n => vs[n].length > 0);
+    const mustWorkSet = new Set(mustWork.filter(n => workable.includes(n)));
+    const etCanDo8    = n => ET_STAFF.includes(n) && vs[n]?.includes(8) && !(WKND_HARD_CAP[n] !== undefined && weekend && st[n].wkndDays >= WKND_HARD_CAP[n]);
+    const bestShift   = (n, opts) => opts.reduce((b,h) => st[n].starts[h] < st[n].starts[b] ? h : b, opts[0]);
+
+    const asgn  = {};
+    const notes = [];
+    let   covOK = true;
+
+    // Flag R3 conflicts: person was on-call last night but has a requested day off today.
+    // Time off wins — they stay off — but we note the R3 violation.
+    NAMES.forEach(n => {
+      if ((isRequestedOff(n, date) || isTraining(n, date)) && st[n].wasOCLast)
+        notes.push(`R3 conflict: ${n} was on-call last night but has a requested day off today`);
+    });
+
+    if (weekend) {
+      // ---- WEEKEND: select exactly 2 workers ----
+      // Normalized urgency: (target - days) / (wkndLeft * target / total).
+      // Measures deficit vs expected pace so everyone starts at 1.0 priority,
+      // regardless of whether their target is 3 (Josh/Ali/Emily) or 5 (others).
+      const wkndUrg = n => {
+        const expected = totalWkndDays > 0 ? wkndLeft * wkndTarget[n] / totalWkndDays : 0;
+        return expected > 0 ? Math.max(0, (wkndTarget[n] - st[n].wkndDays) / expected) : 0;
+      };
+      const capOK   = n => !(WKND_HARD_CAP[n] !== undefined && st[n].wkndDays >= WKND_HARD_CAP[n]);
+      const wkndSortFn = (a, b) => {
+        const am = mustWorkSet.has(a) ? 0 : 1, bm = mustWorkSet.has(b) ? 0 : 1;
+        if (am !== bm) return am - bm;
+        const diff = wkndUrg(b) - wkndUrg(a);
+        if (Math.abs(diff) > 0.001) return diff;
+        return urgency[b] - urgency[a];
+      };
+      // Eligible for weekend. wasOCLast is checked first (R3 hard: must work, overrides any cap).
+      // Everyone else needs remaining budget (wkndUrg>0) or mustWork, AND must be below their cap.
+      const eligible = workable.filter(n => {
+        if (st[n].wasOCLast) return true; // R3 hard: always eligible
+        if (!capOK(n)) return false;       // at hard cap, no more weekends
+        return wkndUrg(n) > 0 || mustWorkSet.has(n);
+      });
+
+      // ---- Slot 1: 8 AM (ET-only) ----
+      // Pick ET person with highest wkndUrg. mustWork ET takes priority.
+      const etElig  = eligible.filter(etCanDo8).sort(wkndSortFn);
+      const etPick  = etElig[0] || null;
+      if (!etPick) { covOK = false; notes.push('No ET staff for 8 AM'); }
+
+      // ---- Slot 2: 12 PM ----
+      // Priority order: (1) mustWork not yet placed, (2) non-ET (Holly/Bryan/Emily need
+      // their weekends; Izzy/Kayla already covered by the 8 AM pool), (3) any ET remainder.
+      // This prevents Izzy/Kayla from double-counting on days when Josh/Ali do 8 AM.
+      const remaining  = eligible.filter(n => n !== etPick).sort(wkndSortFn);
+      const mustRemain = remaining.filter(n => mustWorkSet.has(n));
+      const nonETRem   = remaining.filter(n => !etCanDo8(n));
+      const other      = mustRemain[0] || nonETRem[0] || remaining[0] || null;
+
+      // Assign shifts
+      if (etPick) asgn[etPick] = 8;
+      else if (remaining[0]) asgn[remaining[0]] = bestShift(remaining[0], vs[remaining[0]]);
+      if (other) {
+        asgn[other] = vs[other].includes(12) ? 12 : bestShift(other, vs[other]);
+      }
+
+      // Saturday only: if a wasOCLast person is one of the 2 workers, the 8 AM ET person
+      // would be forced into on-call (R10 violation). Add a 3rd worker starting at 10 AM+
+      // so they can absorb on-call instead.
+      if (dow(date) === 'Sat') {
+        const assignedNames = Object.keys(asgn);
+        const hasWasOCLast  = assignedNames.some(n => st[n].wasOCLast);
+        const hasLateOCElig = assignedNames.some(n => !st[n].wasOCLast && (asgn[n] ?? 0) >= 10);
+        if (hasWasOCLast && !hasLateOCElig) {
+          const third = workable
+            .filter(n => !asgn.hasOwnProperty(n) && !st[n].wasOCLast && capOK(n))
+            .filter(n => vs[n] && vs[n].some(h => h >= 10))
+            .sort((a, b) => wkndUrg(b) - wkndUrg(a));
+          if (third.length > 0) {
+            const t = third[0];
+            const lateOpts = vs[t].filter(h => h >= 10);
+            asgn[t] = lateOpts.reduce((b, h) => st[t].starts[h] < st[t].starts[b] ? h : b, lateOpts[0]);
+          }
+        }
+      }
+
+    } else {
+      // ---- WEEKDAY ----
+
+      // Fixed-start weekday-only staff (e.g. Jacqueline): always assigned first at their fixed hour.
+      // They are added outside the 6-person cap so the original 7 still compete for 6 slots.
+      NAMES.filter(n => WEEKDAY_ONLY.has(n) && workable.includes(n)).forEach(n => {
+        const p = TEAM.find(t => t.name === n);
+        if (p.fixedStartET) asgn[n] = p.fixedStartET;
+      });
+      // Dynamic cap: 6 slots for core team + 1 per weekday-only person already assigned
+      const dayCap = 6 + NAMES.filter(n => WEEKDAY_ONLY.has(n) && asgn.hasOwnProperty(n)).length;
+
+      // Mandatory 8 AM (ET only)
+      // Exclude the likely on-call candidate from 8 AM when alternatives exist,
+      // so they can start at 10 AM+ and be on-call without a same-day early-start violation.
+      const c8 = workable.filter(etCanDo8);
+      let p8 = null;
+      if (c8.length > 0) {
+        const ocEligC8 = c8.filter(n => !st[n].wasOCLast && (OC_HARD_CAP[n] === undefined || st[n].ocCount < OC_HARD_CAP[n]));
+        const likelyOC = ocEligC8.length > 0
+          ? ocEligC8.reduce((b, n) => st[n].ocCount < st[b].ocCount ? n : b, ocEligC8[0])
+          : null;
+        const c8Prefer = likelyOC && c8.length > 1 ? c8.filter(n => n !== likelyOC) : c8;
+        p8 = fairest(c8Prefer, 8, st);
+        asgn[p8] = 8;
+      } else { covOK = false; notes.push('No ET staff for 8 AM'); }
+
+      // Mandatory 12 PM
+      const c12 = workable.filter(n => n !== p8 && vs[n].includes(12));
+      let p12 = null;
+      if (c12.length > 0) { p12 = fairest(c12, 12, st); asgn[p12] = 12; }
+      else { covOK = false; notes.push('No staff for 12 PM'); }
+
+      // Force in mustWork people not yet assigned, highest urgency first
+      // (mustWork is in NAMES order by default; sorting ensures Emily isn't bumped by lower-urgency people)
+      [...mustWork].sort((a,b) => urgency[b] - urgency[a]).forEach(n => {
+        if (asgn.hasOwnProperty(n) || !vs[n]?.length) return;
+        if (Object.keys(asgn).length >= dayCap) return;
+        asgn[n] = bestShift(n, vs[n]);
+      });
+
+      // Fill to 6: skip consecOff=1 UNLESS urgency is high (>=0.6).
+      // This prevents WKND_LOW staff from being doubly penalized: forced off weekends
+      // already burned their day-off budget, so they can't also lose weekday slots.
+      const usedSet = new Set(Object.keys(asgn));
+      // Pre-weekend skip: if today is the last weekday before a weekend, and a non-ET person
+      // has consec>=4 AND still needs weekend days, skip them from the optional pool.
+      // They'll be off today (consec resets or stays low) so they can work the weekend.
+      const tomorrowIsWkndFill = dayIndex < mainDays.length - 1 && isWknd(mainDays[dayIndex + 1]);
+      const fillPool = workable
+        .filter(n => {
+          if (usedSet.has(n)) return false;
+          if (urgency[n] <= 0) return false;
+          if (st[n].consecOff === 1 && urgency[n] < 0.75) return false;
+          // Pre-weekend skip (non-ET, consec>=4, wkndUrg>0): give them the day off
+          if (!weekend && tomorrowIsWkndFill && !ET_STAFF.includes(n) && st[n].consec >= 4) {
+            const wkndExp = totalWkndDays > 0 ? remainingWknd[dayIndex + 1] * wkndTarget[n] / totalWkndDays : 0;
+            if (wkndExp > 0 && (wkndTarget[n] - st[n].wkndDays) / wkndExp > 0) return false;
+          }
+          return true;
+        })
+        .sort((a, b) => {
+          // Deprioritize people with exactly 1 day off so off days extend to 2 when possible,
+          // reducing isolated single-day off islands clustering on one person.
+          const aOne = st[a].consecOff === 1 ? 1 : 0;
+          const bOne = st[b].consecOff === 1 ? 1 : 0;
+          if (aOne !== bOne) return aOne - bOne;
+          return urgency[b] - urgency[a];
+        });
+      for (const n of fillPool) {
+        if (Object.keys(asgn).length >= dayCap) break;
+        const opts = vs[n]; if (!opts?.length) continue;
+        asgn[n] = bestShift(n, opts);
+      }
+    }
+
+    // ---- Safety net: guarantee >=2 staff (override consec cap if needed) ----
+    if (Object.keys(asgn).length < 2) {
+      const emergency = NAMES
+        .filter(n => !asgn.hasOwnProperty(n))
+        .filter(n => !isRequestedOff(n, date))  // time-off requests always win, even in emergency
+        // On weekends, still respect WKND_HARD_CAP even in emergency
+        .filter(n => !(weekend && WKND_HARD_CAP[n] !== undefined && st[n].wkndDays >= WKND_HARD_CAP[n]))
+        // On weekends, don't add people at/over the soft R8 cap (consec>=5, not wasOCLast)
+        // — working would make it day-6+; wasOCLast is exempt (R3 hard)
+        .filter(n => !(weekend && st[n].consec >= 5 && !st[n].wasOCLast))
+        .map(n => {
+          const p = TEAM.find(t => t.name === n);
+          let ok = VALID_STARTS.filter(h => h >= p.earliestStartET);
+          if (st[n].wasOCLast) ok = ok.filter(h => h >= 10);
+          return { n, ok };
+        })
+        .filter(x => x.ok.length > 0)
+        .sort((a,b) => st[a.n].consec - st[b.n].consec);
+      for (const { n, ok } of emergency) {
+        if (Object.keys(asgn).length >= 2) break;
+        const has8AM = Object.values(asgn).includes(8);
+        if (!has8AM && ET_STAFF.includes(n) && ok.includes(8)) asgn[n] = 8;
+        else asgn[n] = ok.reduce((b,h) => st[n].starts[h] < st[n].starts[b] ? h : b, ok[0]);
+        if (!vs[n]) vs[n] = ok;
+      }
+      if (Object.keys(asgn).length > 0) notes.push('Emergency coverage: consec cap overridden');
+    }
+
+    // ---- On-call ----
+    const working = Object.keys(asgn);
+    // Weekday-only / noOnCall staff are never eligible for on-call
+    const ocWorking = working.filter(n => !WEEKDAY_ONLY.has(n));
+    let onCall = null;
+    if (working.length > 0) {
+      // On-call selection. Filters applied in order, relaxing one at a time:
+      // 1. Exclude wasOCLast (would cascade), consecWkndBypassed (would cascade),
+      //    wkndCapped (at their weekend cap; if tomorrow is weekend, OC would force extra day).
+      // 2. Relax consecOC<2 limit.
+      // 3. Relax consecWkndBypassed and wkndCapped exclusion.
+      // 4. Last resort: allow everyone within OC_HARD_CAP.
+      const tomorrowIsWknd = dayIndex < mainDays.length - 1 && isWknd(mainDays[dayIndex + 1]);
+      // Use effective wkndDays: st[n].wkndDays + 1 if they're already assigned today on a weekend.
+      // This prevents someone from being OC today when today's work would push them to their cap,
+      // which would force an extra weekend day tomorrow via wasOCLast.
+      const effectiveWkndDays = n => st[n].wkndDays + (weekend && asgn.hasOwnProperty(n) ? 1 : 0);
+      const wkndCapped = n => tomorrowIsWknd && WKND_HARD_CAP[n] !== undefined && effectiveWkndDays(n) >= WKND_HARD_CAP[n];
+      const ocCap = n => OC_HARD_CAP[n] === undefined || st[n].ocCount < OC_HARD_CAP[n];
+      // Tier 1: all protections
+      let elig = ocWorking.filter(n =>
+        !st[n].wasOCLast && !consecWkndBypassed.has(n) && !wkndCapped(n) &&
+        st[n].consecOC < 2 && ocCap(n)
+      );
+      if (!elig.length) {
+        // Tier 2: relax consecWkndBypassed
+        elig = ocWorking.filter(n => !st[n].wasOCLast && !wkndCapped(n) && st[n].consecOC < 2 && ocCap(n));
+      }
+      if (!elig.length) {
+        // Tier 3: relax consecOC<2 — keep wkndCapped and wasOCLast
+        elig = ocWorking.filter(n => !st[n].wasOCLast && !wkndCapped(n) && ocCap(n));
+      }
+      if (!elig.length) {
+        // Tier 4: relax wasOCLast (allows back-to-back OC); still keep wkndCapped
+        elig = ocWorking.filter(n => !wkndCapped(n) && ocCap(n));
+      }
+      if (!elig.length) {
+        // Tier 5: absolute last resort — allow wkndCapped; better than no OC
+        elig = ocWorking.filter(n => ocCap(n));
+      }
+      if (!elig.length) { elig = [...ocWorking]; notes.push('All staff at OC cap'); }
+      // On the night before a weekend, route OC to whoever needs weekend days most.
+      // This drives wasOCLast slots toward people below their wkndTarget,
+      // and keeps capped people from burning a weekend slot.
+      elig.sort((a, b) => {
+        // Prefer on-call candidates starting at 10 AM or later that day (R-new: avoid burdening early starters)
+        const aLate = (asgn[a] ?? 0) >= 10 ? 0 : 1;
+        const bLate = (asgn[b] ?? 0) >= 10 ? 0 : 1;
+        if (aLate !== bLate) return aLate - bLate;
+        if (tomorrowIsWknd) {
+          const aAtCap = WKND_HARD_CAP[a] !== undefined && st[a].wkndDays >= WKND_HARD_CAP[a];
+          const bAtCap = WKND_HARD_CAP[b] !== undefined && st[b].wkndDays >= WKND_HARD_CAP[b];
+          if (aAtCap !== bAtCap) return aAtCap ? 1 : -1;
+          // Normalized deficit: (target-days)/(wkndLeft*target/total) = pace-relative urgency.
+          // Avoids always preferring Izzy (target=5) over Josh (target=3) when both are on pace.
+          const normDef = n => {
+            const exp = totalWkndDays > 0 ? wkndLeft * wkndTarget[n] / totalWkndDays : 0;
+            return exp > 0 ? (wkndTarget[n] - st[n].wkndDays) / exp : 0;
+          };
+          const diff = normDef(b) - normDef(a);
+          if (Math.abs(diff) > 0.001) return diff;
+        }
+        return st[a].ocCount !== st[b].ocCount ? st[a].ocCount - st[b].ocCount : st[a].consecOC - st[b].consecOC;
+      });
+      onCall = elig[0];
+      // If on-call person starts at 9 AM, bump to 10 AM — they don't need to start early,
+      // and the mandatory 8 AM person is always someone else so no coverage gap is created.
+      // If they're at 8 AM (i.e. they ARE the mandatory 8 AM person), only flag — bumping
+      // to 10 would drop 8 AM coverage.
+      if (onCall && asgn[onCall] !== undefined && asgn[onCall] < 10) {
+        if (asgn[onCall] === 9 && vs[onCall] && vs[onCall].includes(10)) {
+          asgn[onCall] = 10;
+        } else {
+          notes.push(`On-call ${onCall} starts ${SHIFT_LABEL[asgn[onCall]]} (prefer ≥ 10 AM when on-call)`);
+        }
+      }
+    } else { covOK = false; notes.push('No staff scheduled'); }
+
+    // ---- Coverage gaps ----
+    const gaps = coverageGaps(asgn);
+    if (gaps.length) { covOK = false; notes.push(`Gap: ${gaps.map(h => h<12?h+'AM':h===12?'12PM':(h-12)+'PM').join(', ')}`); }
+
+    // ---- Update state ----
+    const dayAsgn = Object.fromEntries(NAMES.map(n => [n, asgn.hasOwnProperty(n) ? asgn[n] : null]));
+    NAMES.forEach(n => {
+      const worked = asgn.hasOwnProperty(n);
+      if (worked) { st[n].consec++; st[n].consecOff=0; st[n].wkdayConsecOff=0; st[n].total++; st[n].week++; st[n].starts[asgn[n]]++; if (weekend) st[n].wkndDays++; }
+      else        { st[n].consec=0; st[n].consecOff++; if (!weekend) st[n].wkdayConsecOff++; st[n].totalOff++; }
+      const oc = n === onCall;
+      st[n].wasOCLast = oc;
+      if (oc) { st[n].consecOC++; st[n].ocCount++; } else { st[n].consecOC=0; }
+    });
+
+    return { date, assignments: dayAsgn, onCall, coverageOK: covOK, notes: notes.join('; ') };
+  });
+
+  // Combine pre-season and main-season
+  schedule = [...preSchedule, ...mainSchedule];
+
+  // --- Post-process: fix on-call assignments where on-call person has next day off ---
+  const ocCountFix = Object.fromEntries(NAMES.map(n => [n, 0]));
+  schedule.forEach(d => { if (d.onCall) ocCountFix[d.onCall]++; });
+
+  for (let i = 0; i < schedule.length - 1; i++) {
+    const today    = schedule[i];
+    const tomorrow = schedule[i + 1];
+    if (today.preseason) continue;  // pre-season days handled separately
+    if (!today.onCall) continue;
+    if (tomorrow.assignments[today.onCall] !== null) continue;
+
+    const workingToday    = NAMES.filter(n => today.assignments[n] !== null);
+    const workingTomorrow = NAMES.filter(n => tomorrow.assignments[n] !== null);
+    // Prefer swaps where person already starts ≥ 10 AM tomorrow
+    let eligible = workingToday.filter(n =>
+      n !== today.onCall &&
+      !WEEKDAY_ONLY.has(n) &&
+      workingTomorrow.includes(n) &&
+      (OC_HARD_CAP[n] === undefined || ocCountFix[n] < OC_HARD_CAP[n]) &&
+      tomorrow.assignments[n] >= 10
+    );
+
+    // Fallback: allow swaps where tomorrow start is 8/9 AM, but bump to 10 AM (satisfies R2)
+    if (!eligible.length) {
+      eligible = workingToday.filter(n =>
+        n !== today.onCall &&
+        !WEEKDAY_ONLY.has(n) &&
+        workingTomorrow.includes(n) &&
+        (OC_HARD_CAP[n] === undefined || ocCountFix[n] < OC_HARD_CAP[n])
+      );
+    }
+
+    if (eligible.length > 0) {
+      eligible.sort((a,b) => ocCountFix[a] - ocCountFix[b]);
+      const newOC = eligible[0];
+      // If their next-day start is before 10 AM, bump it up so R2 is satisfied
+      if (tomorrow.assignments[newOC] < 10) {
+        tomorrow.assignments[newOC] = 10;
+      }
+      ocCountFix[today.onCall]--;
+      today.onCall = newOC;
+      ocCountFix[newOC]++;
+    } else {
+      if (today.notes) today.notes += '; ';
+      today.notes += `On-call ${today.onCall} has next day off (no valid swap found)`;
+    }
+  }
+
+  // Post-process: fix anyone over the days-off cap.
+  // wasOCLast forcing can displace non-ET workers from weekends; this adds them
+  // back on weekdays (no weekday max is defined in the rules).
+  NAMES.forEach(n => {
+    let offCount = schedule.filter(d => !d.preseason && d.assignments[n] === null).length;
+    if (offCount <= maxOffFor(n)) return;
+    const p = TEAM.find(t => t.name === n);
+    const startCounts = {};
+    VALID_STARTS.forEach(h => { startCounts[h] = 0; });
+    schedule.forEach(d => { if (d.assignments[n] !== null) startCounts[d.assignments[n]] = (startCounts[d.assignments[n]] || 0) + 1; });
+    for (let di = 0; di < schedule.length && offCount > maxOffFor(n); di++) {
+      const day = schedule[di];
+      if (day.preseason) continue;               // pre-season days are not subject to days-off cap
+      if (isWknd(day.date)) continue;           // weekends hard-capped at 2
+      if (day.assignments[n] !== null) continue; // already working this day
+      if (isRequestedOff(n, day.date) || isTraining(n, day.date)) continue; // protected — never override
+      const prevWasOC = di > 0 && schedule[di - 1].onCall === n;
+      const minStart  = prevWasOC ? 10 : p.earliestStartET;
+      const opts      = VALID_STARTS.filter(h => h >= minStart);
+      if (!opts.length) continue;
+      const h = opts.reduce((b, h) => startCounts[h] < startCounts[b] ? h : b, opts[0]);
+      // Skip if adding this day would create R4 violation (6+ consecutive days)
+      let bk = 0; for (let k = di-1; k >= 0; k--) { if (schedule[k].assignments[n] !== null) bk++; else break; }
+      let fk = 0; for (let k = di+1; k < schedule.length; k++) { if (schedule[k].assignments[n] !== null) fk++; else break; }
+      if (bk + 1 + fk >= 6) continue;
+      day.assignments[n] = h;
+      startCounts[h]++;
+      offCount--;
+      const gaps = coverageGaps(day.assignments);
+      day.coverageOK = gaps.length === 0;
+      if (gaps.length) day.notes = (day.notes ? day.notes + '; ' : '') + `Gap: ${gaps.map(g => g<12?g+'AM':g===12?'12PM':(g-12)+'PM').join(', ')}`;
+    }
+  });
+
+  // Post-process pass 3: fix R7 (3+ consecutive off days).
+  // Scans for streaks ≥ 3 and inserts a work day on the first weekday in the streak.
+  NAMES.forEach(n => {
+    const p = TEAM.find(t => t.name === n);
+    for (let pass = 0; pass < 4; pass++) {
+      let consecOff = 0, fixed = false;
+      for (let di = 0; di < schedule.length; di++) {
+        if (schedule[di].preseason) { consecOff = 0; continue; } // ignore pre-season days
+        if (schedule[di].assignments[n] === null) {
+          consecOff++;
+          if (consecOff >= 3) {
+            const streakStart = di - consecOff + 1;
+            // If the entire streak is covered by protected days (off/training), skip
+            const allRequested = Array.from({length: consecOff}, (_, k) => schedule[streakStart + k])
+              .every(d => isRequestedOff(n, d.date) || isTraining(n, d.date));
+            if (allRequested) break;
+            for (let ti = streakStart; ti <= di; ti++) {
+              if (isWknd(schedule[ti].date)) continue;      // never add to weekends
+              if (isRequestedOff(n, schedule[ti].date) || isTraining(n, schedule[ti].date)) continue; // protected — skip
+              const prevWasOC = ti > 0 && schedule[ti - 1].onCall === n;
+              const minStart  = prevWasOC ? 10 : p.earliestStartET;
+              const opts      = VALID_STARTS.filter(h => h >= minStart);
+              if (!opts.length) continue;
+              const cnt = Object.fromEntries(VALID_STARTS.map(h => [h, 0]));
+              schedule.forEach(d => { const hh = d.assignments[n]; if (hh !== null) cnt[hh]++; });
+              const h = opts.reduce((b, hh) => cnt[hh] < cnt[b] ? hh : b, opts[0]);
+              schedule[ti].assignments[n] = h;
+              const gaps = coverageGaps(schedule[ti].assignments);
+              schedule[ti].coverageOK = gaps.length === 0;
+              if (gaps.length) schedule[ti].notes = (schedule[ti].notes ? schedule[ti].notes + '; ' : '') + `Gap: ${gaps.map(g => g<12?g+'AM':g===12?'12PM':(g-12)+'PM').join(', ')}`;
+              fixed = true;
+              break;
+            }
+            break; // one fix per pass; re-scan on next pass
+          }
+        } else { consecOff = 0; }
+      }
+      if (!fixed) break;
+    }
+  });
+
+  // Final enforcement: time-off requests are absolute.
+  // This overrides anything the generation loop or post-processors may have assigned.
+  if (timeOffRequests.length || trainingRequests.length) {
+    schedule.forEach(day => {
+      if (day.preseason) return; // pre-season days already handled
+      NAMES.forEach(n => {
+        if ((isRequestedOff(n, day.date) || isTraining(n, day.date)) && day.assignments[n] !== null) {
+          day.assignments[n] = null;
+          if (day.onCall === n) day.onCall = null;
+        }
+      });
+      const gaps = coverageGaps(day.assignments);
+      day.coverageOK = gaps.length === 0;
+      if (!day.coverageOK && !day.notes.includes('Gap:')) {
+        day.notes = (day.notes ? day.notes + '; ' : '') + `Gap due to time-off/training`;
+      }
+    });
+  }
+
+  renderTable();
+  renderStats();
+  document.getElementById('validate-btn').disabled = false;
+  document.getElementById('export-btn').disabled   = false;
+  document.getElementById('sheets-btn').disabled   = false;
+  document.getElementById('pdf-btn').disabled      = false;
+  document.getElementById('validation-out').innerHTML = '';
+  toast(`Schedule generated: ${preDays.length} pre-season + ${mainDays.length} main-season days.`);
+}
+
+function fairest(candidates, h, st) {
+  return candidates.reduce((best, n) => {
+    const bc = st[best].starts[h], nc = st[n].starts[h];
+    if (nc < bc) return n;
+    if (nc === bc && st[n].consec < st[best].consec) return n;
+    return best;
+  });
+}
+
+function coverageGaps(asgn) {
+  const covered = new Set();
+  Object.values(asgn).forEach(h => { if (h !== null) for (let t = h; t < h + SHIFT_LEN; t++) covered.add(t); });
+  const gaps = [];
+  for (let h = 8; h < 20; h++) if (!covered.has(h)) gaps.push(h);
+  return gaps;
+}
+
+// ============================================================
+// RENDER TABLE
+// ============================================================
+function renderTable() {
+  const tbl = document.getElementById('schedule-table');
+  let html = '<thead><tr>';
+  html += '<th class="col-date">Date</th><th class="col-day">Day</th>';
+  NAMES.forEach(n => {
+    const tz = TEAM.find(p=>p.name===n).tz;
+    html += `<th>${n}<small>${tz}</small></th>`;
+  });
+  html += '<th>On-Call</th><th>Coverage</th><th>Notes</th>';
+  html += '</tr></thead><tbody>';
+
+  schedule.forEach((day, di) => {
+    const classes = [];
+    if (isWknd(day.date)) classes.push('weekend');
+    if (day.preseason)    classes.push('preseason');
+    html += `<tr${classes.length ? ` class="${classes.join(' ')}"` : ''}>`;
+    html += `<td class="col-date">${fmtDate(day.date)}</td>`;
+    html += `<td class="col-day">${dow(day.date)}</td>`;
+
+    // Pre-season rows: show ON/OFF/lock, no shift dropdowns
+    if (day.preseason) {
+      NAMES.forEach(n => {
+        const h = day.assignments[n];
+        const reqOff = isRequestedOff(n, day.date);
+        if (h === 'ON') {
+          html += `<td class="sON" style="font-weight:700;font-size:0.78rem;color:#065f46">ON</td>`;
+        } else if (h === 'TRAIN') {
+          html += `<td class="sTRAIN" style="font-weight:700;font-size:0.75rem;color:#92400e">TRAIN</td>`;
+        } else {
+          html += `<td class="${reqOff ? 'sREQ' : 'sOFF'}"><span style="color:#bbb;font-size:0.75rem">${reqOff ? '🔒' : 'OFF'}</span></td>`;
+        }
+      });
+      if (isWknd(day.date) && day.onCall) {
+        html += `<td class="col-oncall">${day.onCall}</td>`;
+      } else {
+        html += `<td class="col-oncall" style="color:#bbb">—</td>`;
+      }
+      html += `<td class="preseason-cov">Pre-season</td>`;
+      html += `<td class="col-notes${day.notes?' has-note':''}">${day.notes||''}</td>`;
+      html += '</tr>';
+      return;
+    }
+
+    NAMES.forEach(n => {
+      const h       = day.assignments[n];         // null = OFF, number = start hour
+      const reqOff  = isRequestedOff(n, day.date);
+      const onTrain = isTraining(n, day.date);
+      const cls = h !== null ? SHIFT_CLASS[h] : (onTrain ? 'sTRAIN' : reqOff ? 'sREQ' : 'sOFF');
+      html += `<td class="${cls}">`;
+      html += `<select class="shift-sel" onchange="cellChange(${di},'${n}',this.value)">`;
+      const offLabel = onTrain && h === null ? 'OFF 🎓' : reqOff && h === null ? 'OFF 🔒' : 'OFF';
+      html += `<option value="OFF"${h===null?' selected':''}>${offLabel}</option>`;
+      VALID_STARTS.forEach(s => {
+        html += `<option value="${s}"${h===s?' selected':''}>${SHIFT_LABEL[s]}</option>`;
+      });
+      html += `</select></td>`;
+    });
+
+    // On-Call dropdown (weekday-only staff excluded)
+    const working = NAMES.filter(n => day.assignments[n] !== null && !WEEKDAY_ONLY.has(n));
+    html += `<td class="col-oncall">`;
+    html += `<select class="oncall-sel" onchange="ocChange(${di},this.value)">`;
+    html += `<option value="">—</option>`;
+    working.forEach(n => html += `<option value="${n}"${day.onCall===n?' selected':''}>${n}</option>`);
+    html += `</select></td>`;
+
+    // Coverage
+    html += `<td class="${day.coverageOK?'cov-ok':'cov-bad'}">${day.coverageOK?'✓ OK':'✗ Gap'}</td>`;
+
+    // Notes
+    html += `<td class="col-notes${day.notes?' has-note':''}">${day.notes||''}</td>`;
+
+    html += '</tr>';
+  });
+
+  html += '</tbody>';
+  tbl.innerHTML = html;
+}
+
+function cellChange(di, name, val) {
+  schedule[di].assignments[name] = val === 'OFF' ? null : +val;
+  // Recheck coverage
+  const gaps = coverageGaps(schedule[di].assignments);
+  schedule[di].coverageOK = gaps.length === 0;
+  schedule[di].notes = gaps.length ? `Gap: ${gaps.map(h=>h<12?h+'AM':h===12?'12PM':(h-12)+'PM').join(', ')}` : '';
+  renderTable();
+  renderStats();
+}
+
+function ocChange(di, val) {
+  schedule[di].onCall = val || null;
+}
+
+// ============================================================
+// STATS
+// ============================================================
+function renderStats() {
+  const tbl = document.getElementById('stats-table');
+  const s = {};
+  NAMES.forEach(n => { s[n] = { total:0, off:0, oc:0, starts:{8:0,9:0,10:0,12:0}, satWork:0, sunWork:0, satOff:0, sunOff:0 }; });
+
+  schedule.filter(d => !d.preseason).forEach(day => {
+    const isSat = dow(day.date) === 'Sat';
+    const isSun = dow(day.date) === 'Sun';
+    NAMES.forEach(n => {
+      const worked = day.assignments[n] !== null;
+      if (worked) {
+        s[n].total++;
+        s[n].starts[day.assignments[n]]++;
+        if (isSat) s[n].satWork++;
+        if (isSun) s[n].sunWork++;
+      } else {
+        s[n].off++;
+        if (isSat) s[n].satOff++;
+        if (isSun) s[n].sunOff++;
+      }
+      if (day.onCall === n) s[n].oc++;
+    });
+  });
+
+  // Count total Saturdays and Sundays in the main season only
+  const totalSats = schedule.filter(d => !d.preseason && dow(d.date) === 'Sat').length;
+  const totalSuns = schedule.filter(d => !d.preseason && dow(d.date) === 'Sun').length;
+
+  let html = '<thead><tr><th>Person</th><th>Tz</th><th>Shifts</th><th>Days Off</th><th>On-Call</th>';
+  VALID_STARTS.forEach(h => html += `<th>${SHIFT_LABEL[h]}</th>`);
+  html += '</tr></thead><tbody>';
+  NAMES.forEach(n => {
+    const cap = maxOffFor(n);
+    const offColor = s[n].off > cap ? 'color:#dc2626;font-weight:700' : 'color:#057a55;font-weight:700';
+    const p = TEAM.find(t => t.name === n);
+    const notesTag = p.weekdayOnly ? ' <span style="font-size:0.7rem;color:#6d28d9;font-weight:600">M-F</span>' : '';
+    html += `<tr><td>${n}${notesTag}</td><td style="color:#888">${p.tz}</td>`;
+    html += `<td>${s[n].total}</td><td style="${offColor}">${s[n].off}/${cap}</td><td>${s[n].oc}</td>`;
+    VALID_STARTS.forEach(h => html += `<td>${s[n].starts[h]||0}</td>`);
+    html += '</tr>';
+  });
+  html += '</tbody>';
+  tbl.innerHTML = html;
+
+  // --- Weekend tracker ---
+  const totalWknds = totalSats + totalSuns;
+  const wtbl = document.getElementById('weekend-table');
+  let whtml = '<thead><tr><th>Person</th><th>Weekend Days Worked</th></tr></thead><tbody>';
+  NAMES.forEach(n => {
+    whtml += `<tr><td>${n}</td><td>${s[n].satWork + s[n].sunWork}</td></tr>`;
+  });
+  whtml += '</tbody>';
+  wtbl.innerHTML = whtml;
+}
+
+// ============================================================
+// VALIDATE
+// ============================================================
+function validateSchedule() {
+  const violations = [];
+  const vs = {};
+  NAMES.forEach(n => { vs[n] = { consec:0, consecOff:0, totalOff:0, consecOC:0, wasOCLast:false }; });
+
+  schedule.forEach((day, i) => {
+    if (day.preseason) return; // pre-season days are not subject to main-season rules
+    const { date, assignments, onCall } = day;
+    const working = NAMES.filter(n => assignments[n] !== null);
+
+    NAMES.forEach(n => {
+      const h = assignments[n];
+      if (h === null) return;
+      const p = TEAM.find(t => t.name === n);
+
+      // Rule 1: timezone floor
+      if (h < p.earliestStartET)
+        violations.push(`[Rule 1] ${fmtDate(date)}: ${n} starts ${SHIFT_LABEL[h]} — below ${p.tz} floor (${p.earliestStartET} AM ET)`);
+
+      // Rule 2: post on-call
+      if (vs[n].wasOCLast && h < 10)
+        violations.push(`[Rule 2] ${fmtDate(date)}: ${n} was on call last night but starts ${SHIFT_LABEL[h]} (must be ≥ 10 AM ET)`);
+
+      // Rule 4: max 5 consecutive
+      if (vs[n].consec >= 5)
+        violations.push(`[Rule 4] ${fmtDate(date)}: ${n} working day ${vs[n].consec+1} in a row (max 5)`);
+    });
+
+    // Rule 3: consecutive on-call cap
+    if (onCall && vs[onCall] && vs[onCall].consecOC >= 2)
+      violations.push(`[Rule 3] ${fmtDate(date)}: ${onCall} on call 3 consecutive nights`);
+
+    // Rule 5: exactly one on-call
+    if (working.length > 0 && !onCall)
+      violations.push(`[Rule 5] ${fmtDate(date)}: No on-call person assigned`);
+    if (onCall && assignments[onCall] === null)
+      violations.push(`[Rule 5] ${fmtDate(date)}: On-call "${onCall}" is not working today`);
+
+    // Rule 6: min 2 staff per day
+    if (working.length < 2)
+      violations.push(`[Rule 6] ${fmtDate(date)}: Only ${working.length} person scheduled (minimum 2)`);
+
+    // Rule 7: max 2 consecutive days off
+    NAMES.forEach(n => {
+      if (assignments[n] === null && vs[n].consecOff >= 2)
+        violations.push(`[Rule 7] ${fmtDate(date)}: ${n} has been off ${vs[n].consecOff + 1} days in a row (max 2)`);
+    });
+
+    // Rule 8: max days off per person (Josh: 10, others: 15)
+    NAMES.forEach(n => {
+      const cap = maxOffFor(n);
+      if (assignments[n] === null && vs[n].totalOff >= cap)
+        violations.push(`[Rule 8] ${fmtDate(date)}: ${n} has ${vs[n].totalOff + 1} total days off (max ${cap})`);
+    });
+
+    // Rule 9: on-call must not precede a day off
+    if (onCall && i < schedule.length - 1) {
+      const tomorrowAsgn = schedule[i + 1].assignments;
+      if (tomorrowAsgn && tomorrowAsgn[onCall] === null)
+        violations.push(`[Rule 9] ${fmtDate(date)}: ${onCall} is on call but has the next day off`);
+    }
+
+    // Update state
+    NAMES.forEach(n => {
+      const worked = assignments[n] !== null;
+      vs[n].consec    = worked ? vs[n].consec + 1 : 0;
+      vs[n].consecOff = worked ? 0 : vs[n].consecOff + 1;
+      vs[n].totalOff  = worked ? vs[n].totalOff : vs[n].totalOff + 1;
+      const oc        = n === onCall;
+      vs[n].wasOCLast = oc;
+      vs[n].consecOC  = oc ? vs[n].consecOC + 1 : 0;
+    });
+  });
+
+  const out = document.getElementById('validation-out');
+  if (!violations.length) {
+    out.innerHTML = '<p class="v-ok" style="margin-top:10px">✅ No hard rule violations found.</p>';
+  } else {
+    out.innerHTML = `<p class="v-fail" style="margin-top:10px">⚠️ ${violations.length} violation(s):</p>` +
+      violations.map(v => `<div class="v-item">${v}</div>`).join('');
+  }
+}
+
+// ============================================================
+// EXPORT CSV
+// ============================================================
+function fmtAssignment(h) {
+  if (h === null) return 'OFF';
+  if (h === 'ON') return 'ON';
+  return SHIFT_LABEL[h];
+}
+
+function exportCSV() {
+  const rows = [['Date','Day',...NAMES,'On-Call','Coverage OK','Notes']];
+  schedule.forEach(day => {
+    const row = [fmtDate(day.date), dow(day.date)];
+    NAMES.forEach(n => row.push(fmtAssignment(day.assignments[n])));
+    row.push(day.onCall || '');
+    row.push(day.coverageOK ? 'YES' : 'NO');
+    row.push(day.notes || '');
+    rows.push(row);
+  });
+  const csv  = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = `schedule_${document.getElementById('start-date').value}_to_${document.getElementById('end-date').value}.csv`;
+  a.click();
+  toast('CSV downloaded!');
+}
+
+// ============================================================
+// EXPORT — GOOGLE SHEETS (TSV copy to clipboard)
+// ============================================================
+function copyForSheets() {
+  if (!schedule.length) { toast('Generate a schedule first.', true); return; }
+  const rows = [['Date', 'Day', ...NAMES, 'On-Call', 'Coverage OK', 'Notes']];
+  schedule.forEach(day => {
+    const row = [fmtDate(day.date), dow(day.date)];
+    NAMES.forEach(n => row.push(fmtAssignment(day.assignments[n])));
+    row.push(day.onCall || '');
+    row.push(day.coverageOK ? 'YES' : 'NO');
+    row.push(day.notes || '');
+    rows.push(row);
+  });
+  const tsv = rows.map(r => r.join('\t')).join('\n');
+  navigator.clipboard.writeText(tsv)
+    .then(() => toast('Copied! Open Google Sheets and press Cmd+V (or Ctrl+V) to paste.'))
+    .catch(() => toast('Clipboard access denied — use Export CSV and import into Sheets instead.', true));
+}
+
+// ============================================================
+// EXPORT — PDF (browser print dialog)
+// ============================================================
+function exportPDF() {
+  if (!schedule.length) { toast('Generate a schedule first.', true); return; }
+  window.print();
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+// Set default dates on page load
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('start-date').value = '2026-05-19';
+  document.getElementById('end-date').value   = '2026-08-10';
+  // Populate person dropdowns
+  const sel = document.getElementById('to-person');
+  const trSel = document.getElementById('tr-person');
+  NAMES.forEach(n => {
+    const o1 = document.createElement('option'); o1.value = o1.textContent = n; sel.appendChild(o1);
+    const o2 = document.createElement('option'); o2.value = o2.textContent = n; trSel.appendChild(o2);
+  });
+  // Restore from storage
+  loadTimeOffFromStorage();
+  renderTimeOffList();
+  loadTrainingFromStorage();
+  renderTrainingList();
+  // Render any existing saves
+  renderSaveList();
+});
+
+let _tt;
+function toast(msg, err=false) {
+  let el = document.querySelector('.toast');
+  if (!el) { el = document.createElement('div'); el.className='toast'; document.body.appendChild(el); }
+  el.textContent = msg;
+  el.className = 'toast' + (err?' err':'');
+  clearTimeout(_tt);
+  _tt = setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 3000);
+}
+</script>
+</body>
+</html>
