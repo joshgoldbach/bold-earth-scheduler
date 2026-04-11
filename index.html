@@ -4,156 +4,223 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bold Earth / ARCC Scheduler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #222; font-size: 14px; }
-
-  header {
-    background: #1a56db; color: white; padding: 14px 24px;
-    display: flex; align-items: center; gap: 12px;
+  /* ── Brand tokens ── */
+  :root {
+    --navy:    #1e293b;   /* Bold Earth dark slate */
+    --blue:    #046bd2;   /* Bold Earth royal blue */
+    --gold:    #F9C112;   /* Bold Earth gold CTA */
+    --gold-dk: #d4a00e;
+    --orange:  #F47E22;   /* Bold Earth orange accent */
+    --green:   #057a55;
+    --red:     #DC4725;   /* Bold Earth red */
+    --slate:   #334155;
+    --mist:    #F0F5FA;   /* Bold Earth light bg */
+    --border:  #e2e8f0;
   }
-  header h1 { font-size: 1.1rem; font-weight: 600; }
-  header span { font-size: 0.8rem; opacity: 0.7; margin-left: 8px; }
 
-  main { max-width: 1500px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--mist); color: #1e293b; font-size: 14px; }
 
-  .card { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); padding: 18px 22px; }
-  .card h2 { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #666; margin-bottom: 14px; }
+  /* ── Header ── */
+  header {
+    background: var(--navy);
+    color: white;
+    padding: 0 28px;
+    display: flex; align-items: center; gap: 16px;
+    min-height: 60px;
+    border-bottom: 3px solid var(--gold);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+  }
+  .header-logo {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .header-logo-icon {
+    width: 36px; height: 36px; background: var(--gold); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; flex-shrink: 0;
+  }
+  header h1 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.35rem; font-weight: 800; letter-spacing: .04em;
+    text-transform: uppercase; line-height: 1.1;
+  }
+  header h1 span {
+    display: block; font-size: 0.72rem; font-weight: 600; opacity: 0.55;
+    text-transform: none; letter-spacing: .02em; margin-top: 1px;
+  }
 
-  /* Settings */
+  main { max-width: 1520px; margin: 0 auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* ── Cards ── */
+  .card {
+    background: white; border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.04);
+    padding: 20px 24px;
+    border: 1px solid var(--border);
+  }
+  .card h2 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.95rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--slate); margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card h2::before {
+    content: ''; display: inline-block; width: 3px; height: 16px;
+    background: var(--gold); border-radius: 2px; flex-shrink: 0;
+  }
+
+  /* ── Form fields ── */
   .settings-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
   .field { display: flex; flex-direction: column; gap: 4px; }
-  .field label { font-size: 0.72rem; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: .04em; }
+  .field label { font-size: 0.7rem; font-weight: 700; color: var(--slate); text-transform: uppercase; letter-spacing: .06em; }
   .field input, .field select {
-    border: 1px solid #d0d5dd; border-radius: 6px; padding: 7px 10px;
-    font-size: 0.88rem; outline: none;
+    border: 1.5px solid var(--border); border-radius: 7px; padding: 7px 11px;
+    font-size: 0.88rem; outline: none; font-family: inherit;
+    transition: border-color .15s, box-shadow .15s;
   }
-  .field input:focus, .field select:focus { border-color: #1a56db; box-shadow: 0 0 0 3px #1a56db22; }
+  .field input:focus, .field select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #046bd220; }
 
-  /* Buttons */
-  .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
-  .btn-primary  { background: #1a56db; color: white; }
-  .btn-primary:hover  { background: #1648c0; }
-  .btn-secondary { background: #e5e7eb; color: #333; }
-  .btn-secondary:hover { background: #d1d5db; }
-  .btn-success  { background: #057a55; color: white; }
-  .btn-success:hover  { background: #046c4e; }
-  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  /* ── Buttons ── */
+  .btn {
+    padding: 8px 18px; border: none; border-radius: 999px;
+    font-size: 0.83rem; font-weight: 700; cursor: pointer;
+    font-family: inherit; letter-spacing: .02em;
+    transition: background .15s, transform .1s, box-shadow .15s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary   { background: var(--blue);  color: white; }
+  .btn-primary:hover   { background: #0358b0; box-shadow: 0 2px 8px #046bd240; }
+  .btn-secondary { background: #e2e8f0; color: var(--navy); }
+  .btn-secondary:hover { background: #cbd5e1; }
+  .btn-success   { background: var(--gold);  color: var(--navy); }
+  .btn-success:hover   { background: var(--gold-dk); box-shadow: 0 2px 8px #F9C11240; }
+  .btn:disabled  { opacity: .38; cursor: not-allowed; transform: none !important; }
 
-  /* Controls bar */
-  .controls-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  /* ── Controls bar ── */
+  .controls-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .spacer { flex: 1; }
-  .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.75rem; align-items: center; }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.74rem; align-items: center; color: var(--slate); }
   .legend-item { display: flex; align-items: center; gap: 4px; }
-  .legend-swatch { width: 12px; height: 12px; border-radius: 2px; border: 1px solid rgba(0,0,0,.1); }
+  .legend-swatch { width: 11px; height: 11px; border-radius: 3px; border: 1px solid rgba(0,0,0,.1); }
 
-  /* Schedule table */
-  .table-scroll { overflow-x: auto; }
+  /* ── Schedule table ── */
+  .table-scroll { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
   #schedule-table { border-collapse: collapse; font-size: 0.8rem; min-width: 100%; }
 
   #schedule-table th {
-    background: #1a56db; color: white; padding: 8px 10px;
+    background: var(--navy); color: white; padding: 9px 10px;
     text-align: center; white-space: nowrap; font-weight: 600;
     position: sticky; top: 0; z-index: 2;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem; letter-spacing: .04em;
   }
   #schedule-table th.col-date, #schedule-table th.col-day { text-align: left; }
 
   #schedule-table td {
-    padding: 3px 5px; border-bottom: 1px solid #eee;
+    padding: 3px 5px; border-bottom: 1px solid #f1f5f9;
     text-align: center; white-space: nowrap;
   }
-  #schedule-table td.col-date { font-weight: 600; text-align: left; padding-left: 10px; }
-  #schedule-table td.col-day  { color: #777; text-align: left; padding-left: 6px; min-width: 38px; }
+  #schedule-table tr:last-child td { border-bottom: none; }
+  #schedule-table td.col-date { font-weight: 700; text-align: left; padding-left: 10px; color: var(--navy); }
+  #schedule-table td.col-day  { color: #94a3b8; text-align: left; padding-left: 6px; min-width: 38px; font-size: 0.75rem; }
 
   /* Weekend rows */
-  #schedule-table tr.weekend td.col-date,
-  #schedule-table tr.weekend td.col-day { background: #f5f6fa; }
+  #schedule-table tr.weekend td { background: #fafbfd; }
+  #schedule-table tr.weekend td.col-date { color: var(--blue); }
 
   /* Pre-season rows */
-  #schedule-table tr.preseason td { background: #f5f0ff !important; color: #888; }
-  #schedule-table tr.preseason td.col-date { color: #6d28d9; font-weight: 700; background: #ede9fe !important; }
+  #schedule-table tr.preseason td { background: #f8f4ff !important; color: #94a3b8; }
+  #schedule-table tr.preseason td.col-date { color: #7c3aed; font-weight: 700; background: #ede9fe !important; }
   #schedule-table tr.preseason td.col-day  { background: #ede9fe !important; }
   #schedule-table tr.preseason td.col-oncall { background: #ddd6fe !important; color: #4c1d95; font-weight: 700; }
-  .preseason-cov { color: #6d28d9; font-weight: 700; font-size: 0.72rem; text-align: center; }
-  td.sON    { background: #d1fae5; }  /* pre-season ON = soft green */
-  td.sTRAIN { background: #fef3c7; }  /* training = amber */
+  .preseason-cov { color: #7c3aed; font-weight: 700; font-size: 0.72rem; text-align: center; }
+  td.sON    { background: #dcfce7; }
+  td.sTRAIN { background: #fef9c3; }
 
-  /* Shift cell colors */
-  td.s8   { background: #fce5cd; }
-  td.s9   { background: #d9ead3; }
-  td.s10  { background: #d0e4f7; }
-  td.s12  { background: #ead1dc; }
-  td.sOFF { background: #f3f3f3; }
+  /* Shift cell colors — richer than before */
+  td.s8   { background: #fde8d0; }
+  td.s9   { background: #dcfce7; }
+  td.s10  { background: #dbeafe; }
+  td.s12  { background: #fce7f3; }
+  td.sOFF { background: #f8fafc; }
 
-  /* Shift dropdown inside cell */
+  /* Shift dropdown */
   .shift-sel {
     border: none; border-radius: 4px; padding: 4px 2px;
-    font-size: 0.78rem; font-weight: 600; cursor: pointer;
-    outline: none; background: transparent; width: 86px;
-    text-align: center;
+    font-size: 0.78rem; font-weight: 700; cursor: pointer;
+    outline: none; background: transparent; width: 86px; text-align: center;
+    font-family: inherit; color: var(--navy);
   }
-  .shift-sel:focus { box-shadow: 0 0 0 2px #1a56db55; border-radius: 4px; }
+  .shift-sel:focus { box-shadow: 0 0 0 2px #046bd250; border-radius: 4px; }
 
   /* On-call column */
-  td.col-oncall { background: #fff9e6; font-weight: 700; min-width: 90px; }
+  td.col-oncall { background: #fffbeb; font-weight: 700; min-width: 90px; border-left: 2px solid #fbbf24; }
   .oncall-sel {
     border: none; background: transparent; font-weight: 700;
     font-size: 0.8rem; cursor: pointer; outline: none; width: 100%;
-    text-align: center;
+    text-align: center; font-family: inherit; color: #92400e;
   }
 
   /* Coverage column */
-  td.cov-ok  { background: #d1fae5; color: #065f46; font-weight: 700; min-width: 72px; }
-  td.cov-bad { background: #fee2e2; color: #991b1b; font-weight: 700; min-width: 72px; }
+  td.cov-ok  { background: #f0fdf4; color: #166534; font-weight: 700; min-width: 72px; }
+  td.cov-bad { background: #fff1f0; color: #991b1b;  font-weight: 700; min-width: 72px; }
 
   /* Notes */
-  td.col-notes { font-size: 0.73rem; text-align: left; padding: 3px 8px; color: #b45309; min-width: 160px; }
+  td.col-notes { font-size: 0.72rem; text-align: left; padding: 3px 8px; color: #92400e; min-width: 160px; }
   td.col-notes.has-note { background: #fffbeb; }
 
   /* Stats */
-  #stats-table, #weekend-table { border-collapse: collapse; font-size: 0.82rem; }
-  #stats-table th, #weekend-table th { background: #f3f4f6; padding: 6px 14px; font-weight: 700; border-bottom: 2px solid #e5e7eb; text-align: center; }
+  #stats-table, #weekend-table { border-collapse: collapse; font-size: 0.82rem; width: 100%; }
+  #stats-table th, #weekend-table th {
+    background: var(--navy); color: white; padding: 8px 14px;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.88rem;
+    letter-spacing: .04em; border-bottom: none; text-align: center;
+  }
   #stats-table th:first-child, #weekend-table th:first-child { text-align: left; }
-  #stats-table td, #weekend-table td { padding: 5px 14px; border-bottom: 1px solid #f0f0f0; text-align: center; }
-  #stats-table td:first-child, #weekend-table td:first-child { font-weight: 600; text-align: left; }
+  #stats-table td, #weekend-table td { padding: 6px 14px; border-bottom: 1px solid #f1f5f9; text-align: center; }
+  #stats-table td:first-child, #weekend-table td:first-child { font-weight: 700; text-align: left; }
+  #stats-table tr:hover td, #weekend-table tr:hover td { background: var(--mist); }
 
   /* Validation */
   #validation-out { margin-top: 10px; }
-  .v-ok   { color: #057a55; font-weight: 700; font-size: 0.88rem; }
-  .v-fail { color: #dc2626; font-weight: 700; font-size: 0.88rem; }
-  .v-item { font-size: 0.78rem; padding: 4px 8px; background: #fee2e2; border-left: 3px solid #dc2626; margin-top: 3px; border-radius: 0 4px 4px 0; }
+  .v-ok   { color: var(--green); font-weight: 700; font-size: 0.88rem; }
+  .v-fail { color: var(--red);   font-weight: 700; font-size: 0.88rem; }
+  .v-item { font-size: 0.78rem; padding: 5px 10px; background: #fff1f0; border-left: 3px solid var(--red); margin-top: 4px; border-radius: 0 6px 6px 0; }
 
   .hidden { display: none !important; }
 
   /* Master schedule status */
-  .master-status { background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:10px 16px; display:flex; align-items:center; gap:12px; font-size:0.85rem; }
-  .master-status.none { background:#f9fafb; border-color:#e5e7eb; }
-  .master-badge { background:#057a55; color:white; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:10px; flex-shrink:0; }
-  .master-unsaved { background:#fffbeb; border-color:#fcd34d; }
+  .master-status { background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:11px 16px; display:flex; align-items:center; gap:12px; font-size:0.85rem; }
+  .master-status.none { background:#f8fafc; border-color:var(--border); }
+  .master-badge { background:var(--green); color:white; font-size:0.68rem; font-weight:800; padding:3px 10px; border-radius:999px; flex-shrink:0; letter-spacing:.06em; font-family:'Barlow Condensed',sans-serif; }
+  .master-unsaved { background:#fffbeb; border-color:#fbbf24; }
   #new-version-banner { margin-bottom: 0; }
-  .new-version-bar { background:#fef3c7; border:1px solid #fcd34d; border-radius:6px; padding:10px 16px; display:flex; align-items:center; gap:12px; font-size:0.85rem; }
-  .audit-entry { font-size:0.78rem; color:#666; padding:3px 0; border-bottom:1px solid #f3f4f6; display:flex; gap:8px; }
+  .new-version-bar { background:#fffbeb; border:1px solid #fbbf24; border-radius:8px; padding:11px 16px; display:flex; align-items:center; gap:12px; font-size:0.85rem; }
+  .audit-entry { font-size:0.78rem; color:#64748b; padding:4px 0; border-bottom:1px solid #f1f5f9; display:flex; gap:8px; }
   .audit-entry:last-child { border-bottom:none; }
-  .audit-who { font-weight:700; color:#333; }
-  /* Locked schedule — read-only cells */
+  .audit-who { font-weight:700; color:var(--navy); }
+
+  /* Lock */
   .schedule-locked .shift-sel, .schedule-locked .oncall-sel { pointer-events:none; appearance:none; -webkit-appearance:none; padding-right:0; }
-  .schedule-locked .shift-sel::after { content:''; }
-  .btn-lock-active { background:#dc2626 !important; color:white !important; }
+  .btn-lock-active { background:var(--red) !important; color:white !important; }
 
-  /* Time-off request card */
-  .timeoff-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #f0f0f0; font-size: 0.82rem; }
+  /* Time-off */
+  .timeoff-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.82rem; }
   .timeoff-item:last-child { border-bottom: none; }
-  td.sREQ { background: #ede9fe; }
-  .req-badge { font-size: 0.65rem; font-weight: 700; color: #6d28d9; background: #ede9fe; border: 1px solid #c4b5fd; border-radius: 3px; padding: 1px 4px; margin-left: 4px; vertical-align: middle; }
+  td.sREQ { background: #f5f3ff; }
+  .req-badge { font-size: 0.65rem; font-weight: 700; color: #7c3aed; background: #ede9fe; border: 1px solid #c4b5fd; border-radius: 4px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; }
 
-  /* Print / PDF */
+  /* Print */
   @media print {
     @page { size: landscape; margin: 12mm; }
     body { background: white; font-size: 11px; }
-    header { background: #1a56db !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 8px 16px; }
+    header { background: var(--navy) !important; border-bottom: 3px solid var(--gold) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 8px 16px; }
     #settings-card, #timeoff-card, #saves-card, #rules-card, #controls-card, #weekend-card { display: none !important; }
     main { padding: 8px; gap: 10px; }
-    .card { box-shadow: none; border: 1px solid #e5e7eb; padding: 10px 14px; }
+    .card { box-shadow: none; border: 1px solid var(--border); padding: 10px 14px; }
     .card h2 { margin-bottom: 8px; }
     #schedule-table td, #schedule-table th { padding: 2px 4px; font-size: 10px; }
     .shift-sel, .oncall-sel { appearance: none; border: none; background: transparent; font-size: 10px; font-weight: 600; pointer-events: none; width: auto; }
@@ -166,45 +233,47 @@
 
   /* Rules table */
   .rules-table { border-collapse: collapse; font-size: 0.82rem; width: 100%; }
-  .rules-table th { background: #f3f4f6; padding: 6px 14px; font-weight: 700; border-bottom: 2px solid #e5e7eb; text-align: left; }
-  .rules-table td { padding: 5px 14px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  .rules-table th { background: var(--navy); color: white; padding: 8px 14px; font-weight: 700; border-bottom: none; text-align: left; font-family: 'Barlow Condensed', sans-serif; letter-spacing:.04em; }
+  .rules-table td { padding: 6px 14px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
   .rules-table td:first-child { font-weight: 700; white-space: nowrap; }
-  .rules-table td:nth-child(2) { white-space: nowrap; font-size: 0.75rem; font-weight: 600; }
-  .rule-hard td:nth-child(2) { color: #dc2626; }
-  .rule-soft td:nth-child(2) { color: #b45309; }
-  .rule-fair td:nth-child(2) { color: #1a56db; }
+  .rules-table td:nth-child(2) { white-space: nowrap; font-size: 0.75rem; font-weight: 700; }
+  .rule-hard td:nth-child(2) { color: var(--red); }
+  .rule-soft td:nth-child(2) { color: var(--orange); }
+  .rule-fair td:nth-child(2) { color: var(--blue); }
   .rule-hard { background: #fff5f5; }
-  .rule-soft { background: #fffbeb; }
-  .rule-fair { background: #f0f4ff; }
+  .rule-soft { background: #fff8f0; }
+  .rule-fair { background: #eff6ff; }
 
   /* Toast */
   .toast {
-    position: fixed; bottom: 20px; right: 20px; background: #1a56db; color: white;
-    padding: 9px 16px; border-radius: 7px; font-size: 0.85rem; font-weight: 500;
-    box-shadow: 0 4px 14px rgba(0,0,0,.2); z-index: 999; transition: opacity .3s;
+    position: fixed; bottom: 24px; right: 24px; background: var(--navy); color: white;
+    padding: 10px 18px; border-radius: 999px; font-size: 0.84rem; font-weight: 600;
+    box-shadow: 0 6px 20px rgba(0,0,0,.25); z-index: 999; transition: opacity .3s;
+    border-left: 4px solid var(--gold);
   }
-  .toast.err { background: #dc2626; }
+  .toast.err { background: var(--red); border-left-color: #ff9999; }
 
-  /* Sub-label in header row */
-  #schedule-table th small { display: block; font-size: 0.65rem; opacity: .75; font-weight: 400; }
+  /* Table sub-labels */
+  #schedule-table th small { display: block; font-size: 0.62rem; opacity: .65; font-weight: 400; font-family: 'Inter', sans-serif; letter-spacing: 0; }
 
-  /* Time-off markers in col-date */
+  /* Time-off markers */
   .marker { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 4px; vertical-align: middle; }
 
-  /* Card view (mobile / My Schedule) */
+  /* Card view */
   .week-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
-  .week-nav span { font-weight:700; font-size:0.9rem; }
+  .week-nav span { font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:1.1rem; letter-spacing:.04em; color:var(--navy); }
   .day-cards-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:10px; }
-  .day-card { border-radius:8px; padding:12px 10px; border:1px solid #e5e7eb; text-align:center; min-width:0; }
-  .day-card.wknd { background:#f5f6fa; }
-  .day-card.off  { background:#f9fafb; opacity:0.6; }
-  .day-card.train { background:#fef3c7; border-color:#fcd34d; }
-  .day-card .dc-dow  { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#999; }
-  .day-card .dc-date { font-size:0.78rem; color:#555; margin:2px 0 8px; }
-  .day-card .dc-shift { font-size:1rem; font-weight:800; margin:4px 0; }
-  .day-card .dc-oc   { font-size:0.68rem; font-weight:700; color:#b45309; background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; padding:2px 6px; display:inline-block; margin-top:4px; }
-  .dc-s8  { color:#c05621; } .dc-s9 { color:#276749; } .dc-s10 { color:#1a56db; } .dc-s12 { color:#9d174d; }
-  .day-card .dc-off-label { font-size:0.78rem; color:#bbb; font-weight:600; }
+  .day-card { border-radius:10px; padding:14px 10px; border:1.5px solid var(--border); text-align:center; min-width:0; transition: box-shadow .15s; }
+  .day-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+  .day-card.wknd { background:#f8faff; border-color:#dbeafe; }
+  .day-card.off  { background:#f8fafc; opacity:0.55; }
+  .day-card.train { background:#fef9c3; border-color:#fbbf24; }
+  .day-card .dc-dow  { font-family:'Barlow Condensed',sans-serif; font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#94a3b8; }
+  .day-card .dc-date { font-size:0.75rem; color:#64748b; margin:2px 0 8px; }
+  .day-card .dc-shift { font-family:'Barlow Condensed',sans-serif; font-size:1.15rem; font-weight:800; margin:4px 0; letter-spacing:.02em; }
+  .day-card .dc-oc   { font-size:0.68rem; font-weight:700; color:#92400e; background:#fef3c7; border:1px solid #fbbf24; border-radius:999px; padding:2px 8px; display:inline-block; margin-top:5px; }
+  .dc-s8  { color:#c2410c; } .dc-s9 { color:#166534; } .dc-s10 { color:var(--blue); } .dc-s12 { color:#9d174d; }
+  .day-card .dc-off-label { font-size:0.78rem; color:#cbd5e1; font-weight:700; }
   .card-view-person { display:flex; align-items:center; gap:10px; margin-bottom:14px; font-size:0.85rem; }
 
   @media (max-width: 700px) {
@@ -220,26 +289,29 @@
 <body>
 
 <!-- NAME PROMPT MODAL -->
-<div id="name-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div style="background:white;border-radius:10px;padding:28px 32px;max-width:340px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-    <h3 style="margin-bottom:8px;font-size:1.05rem;color:#111">Welcome to the Scheduler</h3>
-    <p style="color:#666;font-size:0.85rem;margin-bottom:16px;">Select your name so the team knows who made changes to the master schedule.</p>
-    <select id="name-select" style="width:100%;border:1px solid #d0d5dd;border-radius:6px;padding:8px 10px;font-size:0.9rem;margin-bottom:14px;outline:none;">
+<div id="name-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px);">
+  <div style="background:white;border-radius:14px;padding:32px 36px;max-width:360px;width:90%;box-shadow:0 24px 64px rgba(0,0,0,0.3);border-top:4px solid #F9C112;">
+    <div style="font-size:1.8rem;margin-bottom:10px">🏕</div>
+    <h3 style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#1e293b;margin-bottom:6px">Welcome Back</h3>
+    <p style="color:#64748b;font-size:0.85rem;margin-bottom:18px;line-height:1.5">Select your name so the team knows who made changes to the master schedule.</p>
+    <select id="name-select" style="width:100%;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 11px;font-size:0.9rem;margin-bottom:14px;outline:none;font-family:inherit;color:#1e293b;">
       <option value="">Select your name…</option>
     </select>
-    <button onclick="confirmName()" class="btn btn-primary" style="width:100%">Continue →</button>
+    <button onclick="confirmName()" class="btn btn-success" style="width:100%;padding:10px">Continue →</button>
   </div>
 </div>
 
 <header>
-  <div style="flex:1">
-    <h1>Bold Earth / ARCC Director Support Scheduler
-      <span>8 AM – 8 PM ET · 9-hr shifts · 7 days/week</span>
+  <div class="header-logo">
+    <div class="header-logo-icon">🏕</div>
+    <h1>Bold Earth / ARCC
+      <span>Director Support Scheduler · 8 AM–8 PM ET · 7 days/week</span>
     </h1>
   </div>
+  <div style="flex:1"></div>
   <div style="display:flex;align-items:center;gap:8px;white-space:nowrap">
-    <span id="user-greeting" style="font-size:0.8rem;opacity:0.85"></span>
-    <button onclick="changeName()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:white;border-radius:4px;padding:3px 9px;font-size:0.75rem;cursor:pointer">Change</button>
+    <span id="user-greeting" style="font-size:0.78rem;opacity:0.75;font-weight:500"></span>
+    <button onclick="changeName()" style="background:none;border:1px solid rgba(255,255,255,0.3);color:white;border-radius:999px;padding:4px 12px;font-size:0.75rem;cursor:pointer;font-weight:600;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">Change</button>
   </div>
 </header>
 
