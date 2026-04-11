@@ -135,6 +135,10 @@
   .audit-entry { font-size:0.78rem; color:#666; padding:3px 0; border-bottom:1px solid #f3f4f6; display:flex; gap:8px; }
   .audit-entry:last-child { border-bottom:none; }
   .audit-who { font-weight:700; color:#333; }
+  /* Locked schedule — read-only cells */
+  .schedule-locked .shift-sel, .schedule-locked .oncall-sel { pointer-events:none; appearance:none; -webkit-appearance:none; padding-right:0; }
+  .schedule-locked .shift-sel::after { content:''; }
+  .btn-lock-active { background:#dc2626 !important; color:white !important; }
 
   /* Time-off request card */
   .timeoff-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #f0f0f0; font-size: 0.82rem; }
@@ -326,6 +330,7 @@
       <button class="btn btn-primary"   id="save-changes-btn"   onclick="saveChangesToMaster()"  style="display:none" disabled>💾 Save Changes to Master</button>
       <button class="btn btn-secondary" id="undo-save-btn"      onclick="undoLastSave()"         style="display:none">↩ Undo Last Save</button>
       <button class="btn btn-secondary"                         onclick="loadMaster()"           style="font-size:0.8rem">↺ Reload from Master</button>
+      <button class="btn btn-secondary" id="lock-btn"           onclick="toggleLock()"           style="display:none;margin-left:auto">🔒 Lock Schedule</button>
     </div>
     <div id="audit-log" style="margin-top:14px;display:none">
       <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-bottom:6px">Recent Activity</p>
@@ -406,6 +411,11 @@
       <button class="btn btn-secondary" style="padding:5px 12px" onclick="nextWeek()">Next →</button>
     </div>
     <div id="day-cards-grid" class="day-cards-grid"></div>
+  </div>
+
+  <!-- LOCKED BANNER -->
+  <div id="locked-banner" style="display:none;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:10px 18px;font-size:0.85rem;color:#991b1b;font-weight:600">
+    🔒 Schedule is locked — view only. Contact Josh to request changes.
   </div>
 
   <!-- SCHEDULE GRID -->
@@ -746,6 +756,14 @@ function startMasterListener() {
   masterUnsubscribe = db.collection('schedules').doc('master').onSnapshot(snap => {
     if (!snap.exists || !lastMasterData) return;
     const data = snap.data();
+    // React to lock state changes instantly
+    if (!!data.locked !== scheduleLocked) {
+      scheduleLocked = !!data.locked;
+      applyLockState();
+      if (scheduleLocked) toast('Schedule has been locked by Josh.');
+      else toast('Schedule has been unlocked — you can now edit.');
+    }
+    // Show new version banner if content changed
     if (data.savedAt > lastMasterData.savedAt) {
       showNewVersionBanner(data);
     }
@@ -778,9 +796,11 @@ async function loadMaster() {
     masterLoaded = true;
     hasUnsavedChanges = false;
     lastMasterData = data;
+    scheduleLocked = !!data.locked;
     updateMasterStatus(data);
     updateSaveChangesBtn();
     updateUndoBtn();
+    applyLockState();
     renderAuditLog(data.auditLog);
     startMasterListener();
     toast('Master schedule loaded — live for the whole team.');
@@ -810,6 +830,7 @@ async function publishMaster(requireConfirm) {
       schedule,
       auditLog,
       previousVersion,
+      locked:    scheduleLocked, // preserve current lock state across saves
     };
     await db.collection('schedules').doc('master').set(data);
     masterLoaded = true;
@@ -1541,6 +1562,7 @@ function renderTable() {
 
   html += '</tbody>';
   tbl.innerHTML = html;
+  applyLockState();
 }
 
 function cellChange(di, name, val) {
@@ -1880,6 +1902,51 @@ async function undoLastSave() {
 function updateUndoBtn() {
   const btn = document.getElementById('undo-save-btn');
   if (btn) btn.style.display = lastMasterData?.previousVersion ? '' : 'none';
+}
+
+// ============================================================
+// SCHEDULE LOCK
+// ============================================================
+const ADMIN_USER = 'Josh';
+let scheduleLocked = false;
+
+async function toggleLock() {
+  const newLocked = !scheduleLocked;
+  try {
+    await db.collection('schedules').doc('master').update({ locked: newLocked });
+    scheduleLocked = newLocked;
+    applyLockState();
+    toast(newLocked ? 'Schedule locked — team is in view-only mode.' : 'Schedule unlocked — team can now edit.');
+  } catch(e) {
+    toast('Failed to update lock: ' + e.message, true);
+  }
+}
+
+function applyLockState() {
+  const isAdmin = getCurrentUser() === ADMIN_USER;
+  const lockBtn  = document.getElementById('lock-btn');
+  const saveBtn  = document.getElementById('save-changes-btn');
+  const banner   = document.getElementById('locked-banner');
+  const tbl      = document.getElementById('schedule-table');
+
+  // Lock button: only admin sees it, only when master is loaded
+  if (lockBtn) {
+    lockBtn.style.display = (isAdmin && masterLoaded) ? '' : 'none';
+    lockBtn.textContent   = scheduleLocked ? '🔓 Unlock Schedule' : '🔒 Lock Schedule';
+    lockBtn.className     = scheduleLocked ? 'btn btn-lock-active' : 'btn btn-secondary';
+  }
+
+  // Locked banner: everyone sees it when locked (except admin who controls it)
+  if (banner) banner.style.display = (scheduleLocked && !isAdmin) ? '' : 'none';
+
+  // Save Changes button: hide when locked and not admin
+  if (saveBtn && scheduleLocked && !isAdmin) saveBtn.style.display = 'none';
+
+  // Table: add/remove class to disable dropdowns
+  if (tbl) {
+    if (scheduleLocked && !isAdmin) tbl.classList.add('schedule-locked');
+    else tbl.classList.remove('schedule-locked');
+  }
 }
 
 // ============================================================
