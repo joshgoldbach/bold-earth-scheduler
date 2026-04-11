@@ -426,7 +426,7 @@ const WKND_LOW = new Set(['Ali', 'Josh']);
 // Hard cap: max weekend days worked per person.
 // Emily/Kayla/Holly/Izzy targeted at 3. Bryan absorbs slack (math: 28 slots - 19 from others = 9 for Bryan).
 // Caps raised to accommodate 3rd Saturday worker (+7 slots): Josh+1, Izzy+1, Kayla+1, Holly+2, Bryan+2. Ali/Emily unchanged.
-const WKND_HARD_CAP = { 'Josh': 5, 'Izzy': 5, 'Ali': 3, 'Kayla': 5, 'Holly': 7, 'Bryan': 7, 'Emily': 3, 'Jacqueline': 0 };
+const WKND_HARD_CAP = { 'Josh': 5, 'Izzy': 6, 'Ali': 3, 'Kayla': 6, 'Holly': 6, 'Bryan': 6, 'Emily': 3, 'Jacqueline': 0 };
 // Hard cap: max on-call nights per person.
 // Izzy and Kayla capped at 8 so overflow flows to Holly, guaranteeing Holly >= Izzy and Holly >= Bryan.
 const OC_HARD_CAP   = { 'Josh': 4, 'Izzy': 8, 'Ali': 4, 'Kayla': 8, 'Bryan': 9, 'Emily': 4, 'Jacqueline': 0 };
