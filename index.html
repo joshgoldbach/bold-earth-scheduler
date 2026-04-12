@@ -977,15 +977,15 @@ function generateSchedule() {
         const elig = NAMES.filter(freeForOC).sort((a, b) => preOcCount[a] - preOcCount[b]);
         onCall = elig[0] || null;
         lastWkndOC = onCall;
-        if (onCall) { preOcCount[onCall]++; assignments[onCall] = 'ON'; }
+        if (onCall) { preOcCount[onCall]++; assignments[onCall] = 'BEEPER'; }
       } else { // Sun
         if (lastWkndOC && freeForOC(lastWkndOC)) {
           onCall = lastWkndOC;
-          assignments[onCall] = 'ON';
+          assignments[onCall] = 'BEEPER';
         } else {
           const elig = NAMES.filter(freeForOC).sort((a, b) => preOcCount[a] - preOcCount[b]);
           onCall = elig[0] || null;
-          if (onCall) { preOcCount[onCall]++; assignments[onCall] = 'ON'; }
+          if (onCall) { preOcCount[onCall]++; assignments[onCall] = 'BEEPER'; }
           if (lastWkndOC) notes.push(`${lastWkndOC} unavailable; ${onCall || 'nobody'} covers Sunday`);
         }
       }
@@ -1581,7 +1581,9 @@ function renderTable() {
       visibleNames.forEach(n => {
         const h = day.assignments[n];
         const reqOff = isRequestedOff(n, day.date);
-        if (h === 'ON') {
+        if (h === 'BEEPER') {
+          html += `<td class="col-oncall" style="font-weight:800;font-size:0.75rem;color:#92400e">📟 BEEPER</td>`;
+        } else if (h === 'ON') {
           html += `<td class="sON" style="font-weight:700;font-size:0.78rem;color:#065f46">ON</td>`;
         } else if (h === 'TRAIN') {
           html += `<td class="sTRAIN" style="font-weight:700;font-size:0.75rem;color:#92400e">TRAIN</td>`;
@@ -1903,6 +1905,7 @@ function exportCalendarForSelected() {
 function fmtAssignment(h) {
   if (h === null) return 'OFF';
   if (h === 'ON') return 'ON';
+  if (h === 'BEEPER') return 'BEEPER';
   return SHIFT_LABEL[h];
 }
 
@@ -2116,7 +2119,7 @@ function renderCardView() {
 
     // Pre-season
     if (day.preseason) {
-      const label = h === 'ON' ? 'ON' : h === 'TRAIN' ? 'TRAIN' : 'OFF';
+      const label = h === 'BEEPER' ? '📟 BEEPER' : h === 'ON' ? 'ON' : h === 'TRAIN' ? 'TRAIN' : 'OFF';
       const cardClass = h === 'TRAIN' ? 'train' : h === null ? 'off' : '';
       return `<div class="day-card${isWeekend?' wknd':''} ${cardClass}">
         <div class="dc-dow">${dayName}</div>
