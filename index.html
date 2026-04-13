@@ -172,6 +172,7 @@
   /* Notes */
   td.col-notes { font-size: 0.72rem; text-align: left; padding: 3px 8px; color: #92400e; min-width: 160px; }
   td.col-notes.has-note { background: #fffbeb; }
+  td.col-program { text-align: center; min-width: 80px; }
 
   /* Stats */
   #stats-table, #weekend-table { border-collapse: collapse; font-size: 0.82rem; width: 100%; }
@@ -992,13 +993,13 @@ function generateSchedule() {
           if (lastWkndOC) notes.push(`${lastWkndOC} unavailable; ${onCall || 'nobody'} covers Sunday`);
         }
       }
-      return { date, assignments, onCall, coverageOK: true, preseason: true, notes: notes.join('; ') };
+      return { date, assignments, onCall, coverageOK: true, preseason: true, program: null, notes: notes.join('; ') };
     } else {
       // Weekday: everyone works unless off or at training
       const assignments = Object.fromEntries(NAMES.map(n => [n,
         isRequestedOff(n, date) ? null : isTraining(n, date) ? 'TRAIN' : 'ON'
       ]));
-      return { date, assignments, onCall: null, coverageOK: true, preseason: true, notes: '' };
+      return { date, assignments, onCall: null, coverageOK: true, preseason: true, program: null, notes: '' };
     }
   });
 
@@ -1568,7 +1569,7 @@ function renderTable() {
     const tz = TEAM.find(p=>p.name===n).tz;
     html += `<th>${n}<small>${tz}</small></th>`;
   });
-  html += '<th>On-Call</th><th>Coverage</th><th>Notes</th>';
+  html += '<th>On-Call</th><th>Coverage</th><th>Notes</th><th>Programs Running</th>';
   html += '</tr></thead><tbody>';
 
   schedule.forEach((day, di) => {
@@ -1628,6 +1629,11 @@ function renderTable() {
 
       html += `<td class="preseason-cov">Pre-season</td>`;
       html += `<td class="col-notes${day.notes?' has-note':''}">${day.notes||''}</td>`;
+      html += `<td class="col-program"><select class="shift-sel" onchange="programChange(${di},this.value)" style="width:70px">`;
+      html += `<option value="">—</option>`;
+      html += `<option value="PRS"${day.program==='PRS'?' selected':''}>PRS</option>`;
+      html += `<option value="MKA"${day.program==='MKA'?' selected':''}>MKA</option>`;
+      html += `</select></td>`;
       html += '</tr>';
       return;
     }
@@ -1662,6 +1668,7 @@ function renderTable() {
 
     // Notes
     html += `<td class="col-notes${day.notes?' has-note':''}">${day.notes||''}</td>`;
+    html += `<td></td>`; // Programs Running — pre-season only
 
     html += '</tr>';
   });
@@ -1683,6 +1690,12 @@ function cellChange(di, name, val) {
     updateMasterStatus(lastMasterData);
     updateSaveChangesBtn();
   }
+}
+
+function programChange(di, val) {
+  schedule[di].program = val || null;
+  renderTable();
+  if (masterLoaded) { hasUnsavedChanges = true; updateMasterStatus(lastMasterData); updateSaveChangesBtn(); }
 }
 
 function preCellChange(di, name, val) {
