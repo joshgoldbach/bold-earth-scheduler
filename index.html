@@ -1636,7 +1636,7 @@ function renderTable() {
       const h       = day.assignments[n];         // null = OFF, number = start hour
       const reqOff  = isRequestedOff(n, day.date);
       const onTrain = isTraining(n, day.date);
-      const cls = h !== null ? (typeof h === 'number' ? SHIFT_CLASS[h] : h === 'FIELD' ? 'sFIELD' : 'sON') : (onTrain ? 'sTRAIN' : reqOff ? 'sREQ' : 'sOFF');
+      const cls = h !== null ? (typeof h === 'number' ? SHIFT_CLASS[h] : h === 'FIELD' ? 'sFIELD' : h === 'TRAIN' ? 'sTRAIN' : 'sON') : (onTrain ? 'sTRAIN' : reqOff ? 'sREQ' : 'sOFF');
       html += `<td class="${cls}">`;
       html += `<select class="shift-sel" onchange="cellChange(${di},'${n}',this.value)">`;
       const offLabel = onTrain && h === null ? 'OFF 🎓' : reqOff && h === null ? 'OFF 🔒' : 'OFF';
@@ -1645,6 +1645,7 @@ function renderTable() {
         html += `<option value="${s}"${h===s?' selected':''}>${SHIFT_LABEL[s]}</option>`;
       });
       html += `<option value="FIELD"${h==='FIELD'?' selected':''}>FIELD</option>`;
+      html += `<option value="TRAIN"${h==='TRAIN'?' selected':''}>TRAIN</option>`;
       html += `</select></td>`;
     });
 
@@ -1671,7 +1672,7 @@ function renderTable() {
 }
 
 function cellChange(di, name, val) {
-  schedule[di].assignments[name] = val === 'OFF' ? null : val === 'FIELD' ? 'FIELD' : +val;
+  schedule[di].assignments[name] = val === 'OFF' ? null : val === 'FIELD' ? 'FIELD' : val === 'TRAIN' ? 'TRAIN' : +val;
   const gaps = coverageGaps(schedule[di].assignments);
   schedule[di].coverageOK = gaps.length === 0;
   schedule[di].notes = gaps.length ? `Gap: ${gaps.map(h=>h<12?h+'AM':h===12?'12PM':(h-12)+'PM').join(', ')}` : '';
