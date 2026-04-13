@@ -1579,31 +1579,31 @@ function renderTable() {
     // Pre-season rows: editable dropdowns
     if (day.preseason) {
       const weekend = isWknd(day.date);
-      // Weekday options: ON / OFF  |  Weekend options: BEEPER / OFF
-      const preOpts = weekend
-        ? [['BEEPER','📟 Beeper'], ['OFF','OFF']]
-        : [['ON','ON'], ['OFF','OFF']];
+      // All pre-season options (same set for weekdays and weekends)
+      const preOpts = [
+        ['OFF',    'OFF'],
+        ['ON',     'ON'],
+        ['BEEPER', '📟 Beeper'],
+        ['TRAIN',  'TRAIN'],
+      ];
 
       visibleNames.forEach(n => {
         const h = day.assignments[n];
         const reqOff  = isRequestedOff(n, day.date);
-        const onTrain = isTraining(n, day.date);
 
-        // TRAIN and locked-off are static
-        if (onTrain) {
-          html += `<td class="sTRAIN" style="font-weight:700;font-size:0.75rem;color:#92400e">TRAIN</td>`;
-          return;
-        }
-        if (reqOff) {
+        // Locked time-off is static
+        if (reqOff && h === null) {
           html += `<td class="sREQ"><span style="color:#bbb;font-size:0.75rem">🔒</span></td>`;
           return;
         }
 
-        const cls = h === 'BEEPER' ? 'col-oncall' : h === 'ON' ? 'sON' : 'sOFF';
+        // Map null → 'OFF' for dropdown selection
+        const selected = h === null ? 'OFF' : h;
+        const cls = h === 'BEEPER' ? 'col-oncall' : h === 'ON' ? 'sON' : h === 'TRAIN' ? 'sTRAIN' : 'sOFF';
         html += `<td class="${cls}">`;
-        html += `<select class="shift-sel" onchange="preCellChange(${di},'${n}',this.value)" style="width:74px">`;
+        html += `<select class="shift-sel" onchange="preCellChange(${di},'${n}',this.value)" style="width:80px">`;
         preOpts.forEach(([val, label]) => {
-          html += `<option value="${val}"${h===val?' selected':''}>${label}</option>`;
+          html += `<option value="${val}"${selected===val?' selected':''}>${label}</option>`;
         });
         html += `</select></td>`;
       });
