@@ -139,6 +139,7 @@
   .preseason-cov { color: #7c3aed; font-weight: 700; font-size: 0.72rem; text-align: center; }
   td.sON    { background: #dcfce7; }
   td.sTRAIN { background: #fef9c3; }
+  td.sFIELD { background: #e0f2fe; }  /* field = sky blue */
 
   /* Shift cell colors — richer than before */
   td.s8   { background: #fde8d0; }
@@ -268,6 +269,7 @@
   .day-card.wknd { background:#f8faff; border-color:#dbeafe; }
   .day-card.off  { background:#f8fafc; opacity:0.55; }
   .day-card.train { background:#fef9c3; border-color:#fbbf24; }
+  .day-card.field { background:#e0f2fe; border-color:#7dd3fc; }
   .day-card .dc-dow  { font-family:'Barlow Condensed',sans-serif; font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#94a3b8; }
   .day-card .dc-date { font-size:0.75rem; color:#64748b; margin:2px 0 8px; }
   .day-card .dc-shift { font-family:'Barlow Condensed',sans-serif; font-size:1.15rem; font-weight:800; margin:4px 0; letter-spacing:.02em; }
@@ -464,6 +466,7 @@
         <div class="legend-item"><div class="legend-swatch" style="background:#ead1dc"></div>12 PM</div>
         <div class="legend-item"><div class="legend-swatch" style="background:#f3f3f3"></div>OFF</div>
         <div class="legend-item"><div class="legend-swatch" style="background:#fef3c7;border:1px solid #fcd34d"></div>Training</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#e0f2fe;border:1px solid #7dd3fc"></div>Field</div>
         <div class="legend-item"><div class="legend-swatch" style="background:#fff9e6;border:1px solid #fde68a"></div>On-Call</div>
       </div>
     </div>
@@ -1537,7 +1540,7 @@ function fairest(candidates, h, st) {
 
 function coverageGaps(asgn) {
   const covered = new Set();
-  Object.values(asgn).forEach(h => { if (h !== null) for (let t = h; t < h + SHIFT_LEN; t++) covered.add(t); });
+  Object.values(asgn).forEach(h => { if (typeof h === 'number') for (let t = h; t < h + SHIFT_LEN; t++) covered.add(t); });
   const gaps = [];
   for (let h = 8; h < 20; h++) if (!covered.has(h)) gaps.push(h);
   return gaps;
@@ -1585,6 +1588,7 @@ function renderTable() {
         ['ON',     'ON'],
         ['BEEPER', '📟 Beeper'],
         ['TRAIN',  'TRAIN'],
+        ['FIELD',  'FIELD'],
       ];
 
       visibleNames.forEach(n => {
@@ -1605,7 +1609,7 @@ function renderTable() {
 
         // Map null → 'OFF' for dropdown selection
         const selected = h === null ? 'OFF' : h;
-        const cls = h === 'BEEPER' ? 'col-oncall' : h === 'ON' ? 'sON' : 'sOFF';
+        const cls = h === 'BEEPER' ? 'col-oncall' : h === 'ON' ? 'sON' : h === 'FIELD' ? 'sFIELD' : 'sOFF';
         html += `<td class="${cls}">`;
         html += `<select class="shift-sel" onchange="preCellChange(${di},'${n}',this.value)" style="width:80px">`;
         preOpts.forEach(([val, label]) => {
@@ -1632,7 +1636,7 @@ function renderTable() {
       const h       = day.assignments[n];         // null = OFF, number = start hour
       const reqOff  = isRequestedOff(n, day.date);
       const onTrain = isTraining(n, day.date);
-      const cls = h !== null ? SHIFT_CLASS[h] : (onTrain ? 'sTRAIN' : reqOff ? 'sREQ' : 'sOFF');
+      const cls = h !== null ? (typeof h === 'number' ? SHIFT_CLASS[h] : h === 'FIELD' ? 'sFIELD' : 'sON') : (onTrain ? 'sTRAIN' : reqOff ? 'sREQ' : 'sOFF');
       html += `<td class="${cls}">`;
       html += `<select class="shift-sel" onchange="cellChange(${di},'${n}',this.value)">`;
       const offLabel = onTrain && h === null ? 'OFF 🎓' : reqOff && h === null ? 'OFF 🔒' : 'OFF';
@@ -1640,6 +1644,7 @@ function renderTable() {
       VALID_STARTS.forEach(s => {
         html += `<option value="${s}"${h===s?' selected':''}>${SHIFT_LABEL[s]}</option>`;
       });
+      html += `<option value="FIELD"${h==='FIELD'?' selected':''}>FIELD</option>`;
       html += `</select></td>`;
     });
 
@@ -1666,7 +1671,7 @@ function renderTable() {
 }
 
 function cellChange(di, name, val) {
-  schedule[di].assignments[name] = val === 'OFF' ? null : +val;
+  schedule[di].assignments[name] = val === 'OFF' ? null : val === 'FIELD' ? 'FIELD' : +val;
   const gaps = coverageGaps(schedule[di].assignments);
   schedule[di].coverageOK = gaps.length === 0;
   schedule[di].notes = gaps.length ? `Gap: ${gaps.map(h=>h<12?h+'AM':h===12?'12PM':(h-12)+'PM').join(', ')}` : '';
@@ -1944,6 +1949,7 @@ function fmtAssignment(h) {
   if (h === null) return 'OFF';
   if (h === 'ON') return 'ON';
   if (h === 'BEEPER') return 'BEEPER';
+  if (h === 'FIELD') return 'FIELD';
   return SHIFT_LABEL[h];
 }
 
@@ -2157,7 +2163,7 @@ function renderCardView() {
 
     // Pre-season
     if (day.preseason) {
-      const label = h === 'BEEPER' ? '📟 BEEPER' : h === 'ON' ? 'ON' : h === 'TRAIN' ? 'TRAIN' : 'OFF';
+      const label = h === 'BEEPER' ? '📟 BEEPER' : h === 'ON' ? 'ON' : h === 'TRAIN' ? 'TRAIN' : h === 'FIELD' ? 'FIELD' : 'OFF';
       const cardClass = h === 'TRAIN' ? 'train' : h === null ? 'off' : '';
       return `<div class="day-card${isWeekend?' wknd':''} ${cardClass}">
         <div class="dc-dow">${dayName}</div>
@@ -2188,8 +2194,10 @@ function renderCardView() {
 
     const colorCls = typeof h === 'number' ? SHIFT_COLOR[h] : '';
     const shiftLabel = typeof h === 'number' ? SHIFT_LABEL[h] : h;
+    const isField = h === 'FIELD';
+    const cardExtraCls = isField ? ' field' : '';
 
-    return `<div class="day-card${isWeekend?' wknd':''}">
+    return `<div class="day-card${isWeekend?' wknd':''}${cardExtraCls}">
       <div class="dc-dow">${dayName}</div>
       <div class="dc-date">${dateLabel}</div>
       <div class="dc-shift ${colorCls}">${shiftLabel}</div>
