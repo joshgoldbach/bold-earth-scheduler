@@ -1494,6 +1494,10 @@ function generateSchedule() {
             for (let ti = streakStart; ti <= di; ti++) {
               if (isWknd(schedule[ti].date)) continue;      // never add to weekends
               if (isRequestedOff(n, schedule[ti].date) || isTraining(n, schedule[ti].date)) continue; // protected — skip
+              // Hard cap: don't insert if it would create 6+ consecutive days
+              let bk = 0; for (let k = ti-1; k >= 0; k--) { if (!schedule[k].preseason && schedule[k].assignments[n] !== null) bk++; else break; }
+              let fk = 0; for (let k = ti+1; k < schedule.length; k++) { if (!schedule[k].preseason && schedule[k].assignments[n] !== null) fk++; else break; }
+              if (bk + 1 + fk >= 6) continue; // would hit hard cap — skip this slot
               const prevWasOC = ti > 0 && schedule[ti - 1].onCall === n;
               const minStart  = prevWasOC ? 10 : p.earliestStartET;
               const opts      = VALID_STARTS.filter(h => h >= minStart);
