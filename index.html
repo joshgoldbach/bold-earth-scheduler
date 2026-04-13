@@ -436,7 +436,7 @@
         <tr class="rule-soft"><td>R9</td><td>Soft</td><td>On-call assignment should have a valid next-day swap candidate; fall back to bumping start to 10 AM</td></tr>
         <tr class="rule-soft"><td>R10</td><td>Soft</td><td>On-call person should not start at 8 or 9 AM the same day they are on call</td></tr>
         <tr class="rule-fair"><td>F1</td><td>Fairness</td><td>Minimize and evenly distribute weekend days worked across the team</td></tr>
-        <tr class="rule-fair"><td>F2</td><td>Fairness</td><td>Weekend day targets: Ali=3, Emily=3, Josh=5, Izzy=5, Kayla=5, Holly=7, Bryan=7 (Holly &amp; Bryan higher to cover 3rd Saturday worker slots)</td></tr>
+        <tr class="rule-fair"><td>F2</td><td>Fairness</td><td>Weekend day caps: Ali≤3, Emily≤3, Josh≤5, Izzy≤6, Kayla≤6, Holly≤6, Bryan≤6, Jacqueline=0</td></tr>
         <tr class="rule-fair"><td>F3</td><td>Fairness</td><td>Josh: max 4 on-call shifts total</td></tr>
       </tbody>
     </table>
@@ -980,7 +980,7 @@ function generateSchedule() {
     if (isWknd(date)) {
       // Weekend: on-call person is ON; training people show TRAIN; everyone else is OFF
       const assignments = Object.fromEntries(NAMES.map(n => [n, isTraining(n, date) ? 'TRAIN' : null]));
-      const freeForOC = n => !isRequestedOff(n, date) && !isTraining(n, date);
+      const freeForOC = n => !WEEKDAY_ONLY.has(n) && !isRequestedOff(n, date) && !isTraining(n, date);
       if (d === 'Sat') {
         const elig = NAMES.filter(freeForOC).sort((a, b) => preOcCount[a] - preOcCount[b]);
         onCall = elig[0] || null;
@@ -1157,25 +1157,9 @@ function generateSchedule() {
         asgn[other] = vs[other].includes(12) ? 12 : bestShift(other, vs[other]);
       }
 
-      // Saturday only: if a wasOCLast person is one of the 2 workers, the 8 AM ET person
-      // would be forced into on-call (R10 violation). Add a 3rd worker starting at 10 AM+
-      // so they can absorb on-call instead.
-      if (dow(date) === 'Sat') {
-        const assignedNames = Object.keys(asgn);
-        const hasWasOCLast  = assignedNames.some(n => st[n].wasOCLast);
-        const hasLateOCElig = assignedNames.some(n => !st[n].wasOCLast && (asgn[n] ?? 0) >= 10);
-        if (hasWasOCLast && !hasLateOCElig) {
-          const third = workable
-            .filter(n => !asgn.hasOwnProperty(n) && !st[n].wasOCLast && capOK(n))
-            .filter(n => vs[n] && vs[n].some(h => h >= 10))
-            .sort((a, b) => wkndUrg(b) - wkndUrg(a));
-          if (third.length > 0) {
-            const t = third[0];
-            const lateOpts = vs[t].filter(h => h >= 10);
-            asgn[t] = lateOpts.reduce((b, h) => st[t].starts[h] < st[t].starts[b] ? h : b, lateOpts[0]);
-          }
-        }
-      }
+      // Note: previously added a 3rd Saturday worker to avoid R10 (OC at 8 AM).
+      // Removed — adding a 3rd worker violates R4 (max 2 on weekends, hard constraint).
+      // R10 is soft; an R4 violation is worse. The on-call tier system handles the fallback.
 
     } else {
       // ---- WEEKDAY ----
@@ -1267,6 +1251,7 @@ function generateSchedule() {
         const pool = NAMES
           .filter(n => !asgn.hasOwnProperty(n))
           .filter(n => !isRequestedOff(n, date))  // time-off requests always win
+          .filter(n => !(weekend && WEEKDAY_ONLY.has(n)))  // weekday-only staff never work weekends
           // On weekends, respect WKND_HARD_CAP unless relaxed for R1 compliance (R1 > F2)
           .filter(n => relaxWkndCap ? true : !(weekend && WKND_HARD_CAP[n] !== undefined && st[n].wkndDays >= WKND_HARD_CAP[n]))
           // On weekends, don't add people at/over the soft R8 cap (consec>=5, not wasOCLast)
@@ -1916,11 +1901,10 @@ function validateSchedule() {
       add('R5', `${n}: ${off} days off (max 14)`);
   });
 
-  // F2: weekend day targets
-  const WKND_TARGET_DISPLAY = { 'Ali': 3, 'Emily': 3, 'Josh': 5 };
-  NAMES.forEach(n => {
-    if (WKND_TARGET_DISPLAY[n] !== undefined && vs[n].wkndDays > WKND_TARGET_DISPLAY[n])
-      add('F2', `${n}: ${vs[n].wkndDays} weekend days worked (target ≤ ${WKND_TARGET_DISPLAY[n]})`);
+  // F2: weekend day caps — validate all team members against their WKND_HARD_CAP
+  NAMES.filter(n => WKND_HARD_CAP[n] !== undefined).forEach(n => {
+    if (vs[n].wkndDays > WKND_HARD_CAP[n])
+      add('F2', `${n}: ${vs[n].wkndDays} weekend days worked (cap: ${WKND_HARD_CAP[n]})`);
   });
 
   // F3: Josh on-call cap
