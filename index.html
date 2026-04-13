@@ -1200,14 +1200,22 @@ function generateSchedule() {
           ? ocEligC8.reduce((b, n) => st[n].ocCount < st[b].ocCount ? n : b, ocEligC8[0])
           : null;
         const c8Prefer = likelyOC && c8.length > 1 ? c8.filter(n => n !== likelyOC) : c8;
-        p8 = fairest(c8Prefer, 8, st);
+        // Prefer rested candidates (consecOff !== 1) so mandatory 8 AM doesn't cut short a 2-day rest.
+        // Fall back to full pool if no rested candidates are available.
+        const c8Rested = c8Prefer.filter(n => st[n].consecOff !== 1);
+        p8 = fairest(c8Rested.length > 0 ? c8Rested : c8Prefer, 8, st);
         asgn[p8] = 8;
       } else { covOK = false; notes.push('No ET staff for 8 AM'); }
 
       // Mandatory 12 PM
       const c12 = workable.filter(n => n !== p8 && vs[n].includes(12));
       let p12 = null;
-      if (c12.length > 0) { p12 = fairest(c12, 12, st); asgn[p12] = 12; }
+      if (c12.length > 0) {
+        // Same rest preference for 12 PM slot
+        const c12Rested = c12.filter(n => st[n].consecOff !== 1);
+        p12 = fairest(c12Rested.length > 0 ? c12Rested : c12, 12, st);
+        asgn[p12] = 12;
+      }
       else { covOK = false; notes.push('No staff for 12 PM'); }
 
       // Force in mustWork people not yet assigned, highest urgency first
