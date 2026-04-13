@@ -140,6 +140,10 @@
   td.sON    { background: #dcfce7; }
   td.sTRAIN { background: #fef9c3; }
   td.sFIELD { background: #e0f2fe; }  /* field = sky blue */
+  /* Override preseason row !important so colored cells still show their colors */
+  #schedule-table tr.preseason td.sON    { background: #dcfce7 !important; color: #166534; }
+  #schedule-table tr.preseason td.sTRAIN { background: #fef9c3 !important; color: #92400e; }
+  #schedule-table tr.preseason td.sFIELD { background: #e0f2fe !important; color: #0369a1; }
 
   /* Shift cell colors — richer than before */
   td.s8   { background: #fde8d0; }
