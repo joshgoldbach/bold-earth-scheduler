@@ -1608,17 +1608,13 @@ function renderTable() {
         html += `</select></td>`;
       });
 
-      // On-call column: weekend = dropdown of BEEPER holders; weekday = dash
-      if (weekend) {
-        const beepers = NAMES.filter(n => day.assignments[n] === 'BEEPER' && !WEEKDAY_ONLY.has(n));
-        html += `<td class="col-oncall">`;
-        html += `<select class="oncall-sel" onchange="ocChange(${di},this.value)">`;
-        html += `<option value="">—</option>`;
-        beepers.forEach(n => html += `<option value="${n}"${day.onCall===n?' selected':''}>${n}</option>`);
-        html += `</select></td>`;
-      } else {
-        html += `<td class="col-oncall" style="color:#bbb;font-size:0.75rem">—</td>`;
-      }
+      // On-call column: full name dropdown for both weekdays and weekends (same as main season)
+      const preOcEligible = NAMES.filter(n => !WEEKDAY_ONLY.has(n));
+      html += `<td class="col-oncall">`;
+      html += `<select class="oncall-sel" onchange="ocChange(${di},this.value)">`;
+      html += `<option value="">—</option>`;
+      preOcEligible.forEach(n => html += `<option value="${n}"${day.onCall===n?' selected':''}>${n}</option>`);
+      html += `</select></td>`;
 
       html += `<td class="preseason-cov">Pre-season</td>`;
       html += `<td class="col-notes${day.notes?' has-note':''}">${day.notes||''}</td>`;
