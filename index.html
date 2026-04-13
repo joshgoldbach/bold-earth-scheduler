@@ -1815,66 +1815,75 @@ function renderStats() {
 // VALIDATE
 // ============================================================
 function validateSchedule() {
-  const violations = [];
+  // Buckets keyed by rule ID
+  const buckets = {
+    R1: [], R2: [], R3: [], R4: [], R5: [], R6: [], R7: [], R8: [], R9: [],
+    F1: [], F2: [], F3: []
+  };
+  const add = (id, msg) => buckets[id].push(msg);
+
   const vs = {};
-  NAMES.forEach(n => { vs[n] = { consec:0, consecOff:0, totalOff:0, consecOC:0, wasOCLast:false }; });
+  NAMES.forEach(n => { vs[n] = { consec:0, consecOff:0, totalOff:0, consecOC:0, wasOCLast:false, wkndDays:0, ocCount:0 }; });
 
   schedule.forEach((day, i) => {
-    if (day.preseason) return; // pre-season days are not subject to main-season rules
+    if (day.preseason) return;
     const { date, assignments, onCall } = day;
+    const weekend = isWknd(date);
     const working = NAMES.filter(n => assignments[n] !== null);
+
+    // R1: min 2 per day
+    if (working.length < 2)
+      add('R1', `${fmtDate(date)}: only ${working.length} person scheduled (min 2)`);
+
+    // R4: max 2 on weekends
+    if (weekend && working.length > 2)
+      add('R4', `${fmtDate(date)}: ${working.length} people scheduled on a weekend (max 2)`);
 
     NAMES.forEach(n => {
       const h = assignments[n];
-      if (h === null) return;
+      const worked = h !== null;
       const p = TEAM.find(t => t.name === n);
+      const startH = typeof h === 'number' ? h : null; // null for OFF/TRAIN/ON/FIELD
 
-      // Rule 1: timezone floor
-      if (h < p.earliestStartET)
-        violations.push(`[Rule 1] ${fmtDate(date)}: ${n} starts ${SHIFT_LABEL[h]} — below ${p.tz} floor (${p.earliestStartET} AM ET)`);
+      // R2: post on-call start ≥ 10 AM ET
+      if (vs[n].wasOCLast && worked && startH !== null && startH < 10)
+        add('R2', `${fmtDate(date)}: ${n} was on-call last night but starts ${SHIFT_LABEL[startH]} (must be ≥ 10 AM ET)`);
+      // Also flag if post-OC day is TRAIN/ON (non-numeric) — shift hour unknown, may be early
+      if (vs[n].wasOCLast && worked && startH === null && h !== null)
+        add('R2', `${fmtDate(date)}: ${n} was on-call last night but has a non-timed shift (${h}) — verify start ≥ 10 AM ET`);
 
-      // Rule 2: post on-call
-      if (vs[n].wasOCLast && h < 10)
-        violations.push(`[Rule 2] ${fmtDate(date)}: ${n} was on call last night but starts ${SHIFT_LABEL[h]} (must be ≥ 10 AM ET)`);
+      // R3: on-call not followed by day off (checked via tomorrow's assignments below)
 
-      // Rule 4: max 5 consecutive
-      if (vs[n].consec >= 5)
-        violations.push(`[Rule 4] ${fmtDate(date)}: ${n} working day ${vs[n].consec+1} in a row (max 5)`);
+      // R5: total days off (checked after loop)
+
+      // R8: max 6 consecutive working days (hard cap)
+      if (worked && vs[n].consec >= 6)
+        add('R8', `${fmtDate(date)}: ${n} working day ${vs[n].consec + 1} in a row (hard cap: 6)`);
+      // Also soft flag at 5 consecutive
+      else if (worked && vs[n].consec >= 5)
+        add('R8', `${fmtDate(date)}: ${n} working day ${vs[n].consec + 1} in a row (soft limit: 5)`);
+
+      // R7: max 2 consecutive days off
+      if (!worked && vs[n].consecOff >= 2)
+        add('R7', `${fmtDate(date)}: ${n} off ${vs[n].consecOff + 1} days in a row (max 2)`);
     });
 
-    // Rule 3: consecutive on-call cap
-    if (onCall && vs[onCall] && vs[onCall].consecOC >= 2)
-      violations.push(`[Rule 3] ${fmtDate(date)}: ${onCall} on call 3 consecutive nights`);
-
-    // Rule 5: exactly one on-call
-    if (working.length > 0 && !onCall)
-      violations.push(`[Rule 5] ${fmtDate(date)}: No on-call person assigned`);
-    if (onCall && assignments[onCall] === null)
-      violations.push(`[Rule 5] ${fmtDate(date)}: On-call "${onCall}" is not working today`);
-
-    // Rule 6: min 2 staff per day
-    if (working.length < 2)
-      violations.push(`[Rule 6] ${fmtDate(date)}: Only ${working.length} person scheduled (minimum 2)`);
-
-    // Rule 7: max 2 consecutive days off
-    NAMES.forEach(n => {
-      if (assignments[n] === null && vs[n].consecOff >= 2)
-        violations.push(`[Rule 7] ${fmtDate(date)}: ${n} has been off ${vs[n].consecOff + 1} days in a row (max 2)`);
-    });
-
-    // Rule 8: max days off per person (Josh: 10, others: 15)
-    NAMES.forEach(n => {
-      const cap = maxOffFor(n);
-      if (assignments[n] === null && vs[n].totalOff >= cap)
-        violations.push(`[Rule 8] ${fmtDate(date)}: ${n} has ${vs[n].totalOff + 1} total days off (max ${cap})`);
-    });
-
-    // Rule 9: on-call must not precede a day off
+    // R3: on-call must not precede a day off
     if (onCall && i < schedule.length - 1) {
-      const tomorrowAsgn = schedule[i + 1].assignments;
-      if (tomorrowAsgn && tomorrowAsgn[onCall] === null)
-        violations.push(`[Rule 9] ${fmtDate(date)}: ${onCall} is on call but has the next day off`);
+      const next = schedule[i + 1];
+      if (!next.preseason && next.assignments[onCall] === null)
+        add('R3', `${fmtDate(date)}: ${onCall} is on-call but has the next day off`);
     }
+
+    // R6: max 2 consecutive on-call nights
+    if (onCall && vs[onCall] && vs[onCall].consecOC >= 2)
+      add('R6', `${fmtDate(date)}: ${onCall} on-call ${vs[onCall].consecOC + 1} nights in a row (max 2)`);
+
+    // R9: no on-call assigned
+    if (working.length > 0 && !onCall)
+      add('R9', `${fmtDate(date)}: no on-call person assigned`);
+    if (onCall && assignments[onCall] === null)
+      add('R9', `${fmtDate(date)}: on-call "${onCall}" is not actually working today`);
 
     // Update state
     NAMES.forEach(n => {
@@ -1882,19 +1891,89 @@ function validateSchedule() {
       vs[n].consec    = worked ? vs[n].consec + 1 : 0;
       vs[n].consecOff = worked ? 0 : vs[n].consecOff + 1;
       vs[n].totalOff  = worked ? vs[n].totalOff : vs[n].totalOff + 1;
-      const oc        = n === onCall;
+      if (worked && weekend) vs[n].wkndDays++;
+      const oc = n === onCall;
       vs[n].wasOCLast = oc;
       vs[n].consecOC  = oc ? vs[n].consecOC + 1 : 0;
+      if (oc) vs[n].ocCount++;
     });
   });
 
-  const out = document.getElementById('validation-out');
-  if (!violations.length) {
-    out.innerHTML = '<p class="v-ok" style="margin-top:10px">✅ No hard rule violations found.</p>';
-  } else {
-    out.innerHTML = `<p class="v-fail" style="margin-top:10px">⚠️ ${violations.length} violation(s):</p>` +
-      violations.map(v => `<div class="v-item">${v}</div>`).join('');
-  }
+  // R5: exactly 13–14 days off per person (main season)
+  NAMES.forEach(n => {
+    const off = vs[n].totalOff;
+    if (off < 13)
+      add('R5', `${n}: only ${off} days off (min 13)`);
+    else if (off > 14 && n !== 'Josh' && n !== 'Jacqueline')
+      add('R5', `${n}: ${off} days off (max 14)`);
+  });
+
+  // F2: weekend day targets
+  const WKND_TARGET_DISPLAY = { 'Ali': 3, 'Emily': 3, 'Josh': 5 };
+  NAMES.forEach(n => {
+    if (WKND_TARGET_DISPLAY[n] !== undefined && vs[n].wkndDays > WKND_TARGET_DISPLAY[n])
+      add('F2', `${n}: ${vs[n].wkndDays} weekend days worked (target ≤ ${WKND_TARGET_DISPLAY[n]})`);
+  });
+
+  // F3: Josh on-call cap
+  if (vs['Josh'] && vs['Josh'].ocCount > OC_HARD_CAP['Josh'])
+    add('F3', `Josh: ${vs['Josh'].ocCount} on-call nights (cap: ${OC_HARD_CAP['Josh']})`);
+
+  // ---- Render as table ----
+  const RULES = [
+    { id:'R1', label:'R1 – Min 2/day',           hard:true  },
+    { id:'R2', label:'R2 – Post-OC ≥10 AM ET',   hard:true  },
+    { id:'R3', label:'R3 – OC → no day off',      hard:true  },
+    { id:'R4', label:'R4 – Max 2 on weekends',    hard:true  },
+    { id:'R5', label:'R5 – 13–14 days off',       hard:true  },
+    { id:'R6', label:'R6 – Max 2 consec OC',      hard:false },
+    { id:'R7', label:'R7 – Max 2 consec days off',hard:false },
+    { id:'R8', label:'R8 – Max 6 consec workdays',hard:false },
+    { id:'R9', label:'R9 – OC always assigned',   hard:false },
+    { id:'F1', label:'F1 – Weekend distribution', hard:false, fair:true },
+    { id:'F2', label:'F2 – Weekend day targets',  hard:false, fair:true },
+    { id:'F3', label:'F3 – Josh OC cap',          hard:false, fair:true },
+  ];
+
+  let hardCount = 0, softCount = 0, fairCount = 0;
+  RULES.forEach(r => {
+    const n = buckets[r.id].length;
+    if (r.fair) fairCount += n;
+    else if (r.hard) hardCount += n;
+    else softCount += n;
+  });
+
+  const summaryColor = hardCount > 0 ? '#dc2626' : softCount > 0 ? '#d97706' : '#057a55';
+  let html = `<div style="margin-top:10px">`;
+  html += `<div style="font-weight:700;margin-bottom:8px;color:${summaryColor}">`;
+  html += `${hardCount} hard violation${hardCount!==1?'s':''} · ${softCount} soft violation${softCount!==1?'s':''} · ${fairCount} fairness flag${fairCount!==1?'s':''}`;
+  html += `</div>`;
+  html += `<table style="width:100%;border-collapse:collapse;font-size:0.78rem">`;
+  html += `<thead><tr style="background:#f1f5f9">`;
+  html += `<th style="text-align:left;padding:5px 8px;border-bottom:2px solid #e2e8f0">Rule</th>`;
+  html += `<th style="text-align:center;padding:5px 8px;border-bottom:2px solid #e2e8f0">Count</th>`;
+  html += `<th style="text-align:left;padding:5px 8px;border-bottom:2px solid #e2e8f0">Details</th>`;
+  html += `</tr></thead><tbody>`;
+
+  RULES.forEach(r => {
+    const items = buckets[r.id];
+    const count = items.length;
+    const isViolation = count > 0;
+    const rowBg = isViolation
+      ? (r.fair ? '#fffbeb' : r.hard ? '#fff1f0' : '#fefce8')
+      : 'transparent';
+    const countColor = isViolation
+      ? (r.fair ? '#92400e' : r.hard ? '#dc2626' : '#b45309')
+      : '#6b7280';
+    html += `<tr style="background:${rowBg};border-bottom:1px solid #f1f5f9">`;
+    html += `<td style="padding:4px 8px;font-weight:600;white-space:nowrap">${r.label}</td>`;
+    html += `<td style="text-align:center;padding:4px 8px;font-weight:700;color:${countColor}">${count > 0 ? count : '—'}</td>`;
+    html += `<td style="padding:4px 8px;color:#64748b">${items.length ? items.slice(0,3).join('<br>') + (items.length>3?`<br><em>…and ${items.length-3} more</em>`:'') : '✓'}</td>`;
+    html += `</tr>`;
+  });
+
+  html += `</tbody></table></div>`;
+  document.getElementById('validation-out').innerHTML = html;
 }
 
 // ============================================================
