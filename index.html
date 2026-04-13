@@ -1765,8 +1765,14 @@ function renderStats() {
   let html = '<thead><tr><th>Person</th><th>Tz</th><th>Shifts</th><th>Days Off</th><th>On-Call</th>';
   VALID_STARTS.forEach(h => html += `<th>${SHIFT_LABEL[h]}</th>`);
   html += '</tr></thead><tbody>';
+  // Display target: 14 days off per person (standard 5-day week over 47-day period).
+  // Josh has a reduced target (10) due to his role; Jacqueline is weekday-only.
+  // This is display-only — schedule generation uses maxOffFor() separately.
+  const OFF_DISPLAY_TARGET = { 'Josh': 10, 'Jacqueline': 14 };
+  const offDisplayTarget = n => OFF_DISPLAY_TARGET[n] ?? 14;
+
   NAMES.forEach(n => {
-    const cap = maxOffFor(n);
+    const cap = offDisplayTarget(n);
     const offColor = s[n].off > cap ? 'color:#dc2626;font-weight:700' : 'color:#057a55;font-weight:700';
     const p = TEAM.find(t => t.name === n);
     const notesTag = p.weekdayOnly ? ' <span style="font-size:0.7rem;color:#6d28d9;font-weight:600">M-F</span>' : '';
