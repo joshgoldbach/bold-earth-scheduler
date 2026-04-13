@@ -1245,32 +1245,39 @@ function generateSchedule() {
       }
     }
 
-    // ---- Safety net: guarantee >=2 staff (override consec cap if needed) ----
+    // ---- Safety net: guarantee >=2 staff (R1 hard constraint) ----
     if (Object.keys(asgn).length < 2) {
-      const emergency = NAMES
-        .filter(n => !asgn.hasOwnProperty(n))
-        .filter(n => !isRequestedOff(n, date))  // time-off requests always win, even in emergency
-        // On weekends, still respect WKND_HARD_CAP even in emergency
-        .filter(n => !(weekend && WKND_HARD_CAP[n] !== undefined && st[n].wkndDays >= WKND_HARD_CAP[n]))
-        // On weekends, don't add people at/over the soft R8 cap (consec>=5, not wasOCLast)
-        // — working would make it day-6+; wasOCLast is exempt (R3 hard)
-        .filter(n => !(weekend && st[n].consec >= 5 && !st[n].wasOCLast))
-        .map(n => {
-          const p = TEAM.find(t => t.name === n);
-          let ok = VALID_STARTS.filter(h => h >= p.earliestStartET);
-          if (st[n].wasOCLast) ok = ok.filter(h => h >= 10);
-          return { n, ok };
-        })
-        .filter(x => x.ok.length > 0)
-        .sort((a,b) => st[a.n].consec - st[b.n].consec);
-      for (const { n, ok } of emergency) {
-        if (Object.keys(asgn).length >= 2) break;
-        const has8AM = Object.values(asgn).includes(8);
-        if (!has8AM && ET_STAFF.includes(n) && ok.includes(8)) asgn[n] = 8;
-        else asgn[n] = ok.reduce((b,h) => st[n].starts[h] < st[n].starts[b] ? h : b, ok[0]);
-        if (!vs[n]) vs[n] = ok;
+      const fillEmergency = (relaxWkndCap) => {
+        const pool = NAMES
+          .filter(n => !asgn.hasOwnProperty(n))
+          .filter(n => !isRequestedOff(n, date))  // time-off requests always win
+          // On weekends, respect WKND_HARD_CAP unless relaxed for R1 compliance (R1 > F2)
+          .filter(n => relaxWkndCap ? true : !(weekend && WKND_HARD_CAP[n] !== undefined && st[n].wkndDays >= WKND_HARD_CAP[n]))
+          // On weekends, don't add people at/over the soft R8 cap (consec>=5, not wasOCLast)
+          .filter(n => !(weekend && st[n].consec >= 5 && !st[n].wasOCLast))
+          .map(n => {
+            const p = TEAM.find(t => t.name === n);
+            let ok = VALID_STARTS.filter(h => h >= p.earliestStartET);
+            if (st[n].wasOCLast) ok = ok.filter(h => h >= 10);
+            return { n, ok };
+          })
+          .filter(x => x.ok.length > 0)
+          .sort((a,b) => st[a.n].consec - st[b.n].consec);
+        for (const { n, ok } of pool) {
+          if (Object.keys(asgn).length >= 2) break;
+          const has8AM = Object.values(asgn).includes(8);
+          if (!has8AM && ET_STAFF.includes(n) && ok.includes(8)) asgn[n] = 8;
+          else asgn[n] = ok.reduce((b,h) => st[n].starts[h] < st[n].starts[b] ? h : b, ok[0]);
+          if (!vs[n]) vs[n] = ok;
+        }
+      };
+      fillEmergency(false); // first pass: respect all caps
+      if (Object.keys(asgn).length < 2) {
+        fillEmergency(true); // second pass: override WKND_HARD_CAP — R1 hard > F2 fairness
+        if (Object.keys(asgn).length >= 2) notes.push('Emergency coverage: weekend cap overridden for R1');
+      } else if (Object.keys(asgn).length > 0) {
+        notes.push('Emergency coverage: consec cap overridden');
       }
-      if (Object.keys(asgn).length > 0) notes.push('Emergency coverage: consec cap overridden');
     }
 
     // ---- On-call ----
@@ -1322,6 +1329,11 @@ function generateSchedule() {
         const aLate = (asgn[a] ?? 0) >= 10 ? 0 : 1;
         const bLate = (asgn[b] ?? 0) >= 10 ? 0 : 1;
         if (aLate !== bLate) return aLate - bLate;
+        // Deprioritize people with consec>=4: being on-call tonight forces them back tomorrow,
+        // pushing them to 6+ consecutive days (R8 soft violation via cascade).
+        const aHighConsec = st[a].consec >= 4 ? 1 : 0;
+        const bHighConsec = st[b].consec >= 4 ? 1 : 0;
+        if (aHighConsec !== bHighConsec) return aHighConsec - bHighConsec;
         if (tomorrowIsWknd) {
           const aAtCap = WKND_HARD_CAP[a] !== undefined && st[a].wkndDays >= WKND_HARD_CAP[a];
           const bAtCap = WKND_HARD_CAP[b] !== undefined && st[b].wkndDays >= WKND_HARD_CAP[b];
