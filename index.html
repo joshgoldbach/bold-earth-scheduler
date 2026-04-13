@@ -137,19 +137,19 @@
   #schedule-table tr.preseason td.col-day  { background: #ede9fe !important; }
   #schedule-table tr.preseason td.col-oncall { background: #ddd6fe !important; color: #4c1d95; font-weight: 700; }
   .preseason-cov { color: #7c3aed; font-weight: 700; font-size: 0.72rem; text-align: center; }
-  td.sON    { background: #dcfce7; }
-  td.sTRAIN { background: #fef9c3; }
-  td.sFIELD { background: #e0f2fe; }  /* field = sky blue */
+  td.sON    { background: #dcfce7 !important; }
+  td.sTRAIN { background: #fef9c3 !important; }
+  td.sFIELD { background: #e0f2fe !important; }  /* field = sky blue */
   /* Override preseason row !important so colored cells still show their colors */
   #schedule-table tr.preseason td.sON    { background: #dcfce7 !important; color: #166534; }
   #schedule-table tr.preseason td.sTRAIN { background: #fef9c3 !important; color: #92400e; }
   #schedule-table tr.preseason td.sFIELD { background: #e0f2fe !important; color: #0369a1; }
 
-  /* Shift cell colors — richer than before */
-  td.s8   { background: #fde8d0; }
-  td.s9   { background: #dcfce7; }
-  td.s10  { background: #dbeafe; }
-  td.s12  { background: #fce7f3; }
+  /* Shift cell colors — !important so they win over row-level weekend/preseason backgrounds */
+  td.s8   { background: #fde8d0 !important; }
+  td.s9   { background: #dcfce7 !important; }
+  td.s10  { background: #dbeafe !important; }
+  td.s12  { background: #fce7f3 !important; }
   td.sOFF { background: #f8fafc; }
 
   /* Shift dropdown */
