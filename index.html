@@ -1591,6 +1591,12 @@ function renderTable() {
         const h = day.assignments[n];
         const reqOff  = isRequestedOff(n, day.date);
 
+        // TRAIN: static amber highlight (no dropdown)
+        if (h === 'TRAIN') {
+          html += `<td class="sTRAIN" style="font-weight:700;font-size:0.75rem;color:#92400e">TRAIN</td>`;
+          return;
+        }
+
         // Locked time-off is static
         if (reqOff && h === null) {
           html += `<td class="sREQ"><span style="color:#bbb;font-size:0.75rem">🔒</span></td>`;
@@ -1599,7 +1605,7 @@ function renderTable() {
 
         // Map null → 'OFF' for dropdown selection
         const selected = h === null ? 'OFF' : h;
-        const cls = h === 'BEEPER' ? 'col-oncall' : h === 'ON' ? 'sON' : h === 'TRAIN' ? 'sTRAIN' : 'sOFF';
+        const cls = h === 'BEEPER' ? 'col-oncall' : h === 'ON' ? 'sON' : 'sOFF';
         html += `<td class="${cls}">`;
         html += `<select class="shift-sel" onchange="preCellChange(${di},'${n}',this.value)" style="width:80px">`;
         preOpts.forEach(([val, label]) => {
