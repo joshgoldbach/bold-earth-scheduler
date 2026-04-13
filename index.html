@@ -1059,6 +1059,10 @@ function generateSchedule() {
       if (isTraining(n, date)) return false;
       // Weekday-only staff never work weekends
       if (WEEKDAY_ONLY.has(n) && isWknd(date)) return false;
+      // HARD CAP: never work more than 6 consecutive days, even for R3 (wasOCLast).
+      // OC is blocked at consec>=5 (see below) so this cap should never conflict with R3;
+      // if it does, we flag the R3 violation rather than cascade to day 7+.
+      if (st[n].consec >= 6) return false;
       if (st[n].consec < 5) return true;
       if (st[n].wasOCLast) return true;
       // Non-ET only: ET staff (Josh/Izzy/Ali/Kayla) have the emergency block for 8 AM coverage.
@@ -1303,26 +1307,34 @@ function generateSchedule() {
       const effectiveWkndDays = n => st[n].wkndDays + (weekend && asgn.hasOwnProperty(n) ? 1 : 0);
       const wkndCapped = n => tomorrowIsWknd && WKND_HARD_CAP[n] !== undefined && effectiveWkndDays(n) >= WKND_HARD_CAP[n];
       const ocCap = n => OC_HARD_CAP[n] === undefined || st[n].ocCount < OC_HARD_CAP[n];
+      // Hard: never assign OC when consec>=5. Being OC tonight forces work tomorrow (R3),
+      // which would be day 7+ — violating the 6-consecutive-day hard cap.
+      const consecSafeForOC = n => st[n].consec < 5;
       // Tier 1: all protections
       let elig = ocWorking.filter(n =>
-        !st[n].wasOCLast && !consecWkndBypassed.has(n) && !wkndCapped(n) &&
+        consecSafeForOC(n) && !st[n].wasOCLast && !consecWkndBypassed.has(n) && !wkndCapped(n) &&
         st[n].consecOC < 2 && ocCap(n)
       );
       if (!elig.length) {
         // Tier 2: relax consecWkndBypassed
-        elig = ocWorking.filter(n => !st[n].wasOCLast && !wkndCapped(n) && st[n].consecOC < 2 && ocCap(n));
+        elig = ocWorking.filter(n => consecSafeForOC(n) && !st[n].wasOCLast && !wkndCapped(n) && st[n].consecOC < 2 && ocCap(n));
       }
       if (!elig.length) {
         // Tier 3: relax consecOC<2 — keep wkndCapped and wasOCLast
-        elig = ocWorking.filter(n => !st[n].wasOCLast && !wkndCapped(n) && ocCap(n));
+        elig = ocWorking.filter(n => consecSafeForOC(n) && !st[n].wasOCLast && !wkndCapped(n) && ocCap(n));
       }
       if (!elig.length) {
         // Tier 4: relax wasOCLast (allows back-to-back OC); still keep wkndCapped
-        elig = ocWorking.filter(n => !wkndCapped(n) && ocCap(n));
+        elig = ocWorking.filter(n => consecSafeForOC(n) && !wkndCapped(n) && ocCap(n));
       }
       if (!elig.length) {
-        // Tier 5: absolute last resort — allow wkndCapped; better than no OC
+        // Tier 5: relax wkndCapped; still protect consec cap
+        elig = ocWorking.filter(n => consecSafeForOC(n) && ocCap(n));
+      }
+      if (!elig.length) {
+        // Tier 6: last resort — relax consecSafeForOC; flag R3/consec risk in notes
         elig = ocWorking.filter(n => ocCap(n));
+        if (elig.length) notes.push('Warning: OC assigned to high-consec person — possible 7-day cascade');
       }
       if (!elig.length) { elig = [...ocWorking]; notes.push('All staff at OC cap'); }
       // On the night before a weekend, route OC to whoever needs weekend days most.
