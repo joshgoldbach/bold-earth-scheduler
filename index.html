@@ -1969,11 +1969,23 @@ function renderStats() {
   tbl.innerHTML = html;
 
   // --- Weekend tracker ---
-  const totalWknds = totalSats + totalSuns;
+  // Count full weekends off (both Sat + Sun off) per person
+  const fullWeekendsOff = Object.fromEntries(NAMES.map(n => [n, 0]));
+  const mainDays = schedule.filter(d => !d.preseason);
+  for (let i = 0; i < mainDays.length - 1; i++) {
+    if (dow(mainDays[i].date) === 'Sat' && dow(mainDays[i+1].date) === 'Sun') {
+      NAMES.forEach(n => {
+        if (mainDays[i].assignments[n] === null && mainDays[i+1].assignments[n] === null) {
+          fullWeekendsOff[n]++;
+        }
+      });
+    }
+  }
+  const totalFullWknds = totalSats; // one Sat per weekend pair
   const wtbl = document.getElementById('weekend-table');
-  let whtml = '<thead><tr><th>Person</th><th>Weekend Days Worked</th></tr></thead><tbody>';
+  let whtml = '<thead><tr><th>Person</th><th>Weekend Days Worked</th><th>Full Weekends Off</th></tr></thead><tbody>';
   NAMES.forEach(n => {
-    whtml += `<tr><td>${n}</td><td>${s[n].satWork + s[n].sunWork}</td></tr>`;
+    whtml += `<tr><td>${n}</td><td>${s[n].satWork + s[n].sunWork}</td><td>${fullWeekendsOff[n]}/${totalFullWknds}</td></tr>`;
   });
   whtml += '</tbody>';
   wtbl.innerHTML = whtml;
