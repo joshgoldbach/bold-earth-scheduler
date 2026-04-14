@@ -1299,6 +1299,9 @@ function computeSchedule(preDays, mainDays) {
             const wkndExp = totalWkndDays > 0 ? remainingWknd[dayIndex + 1] * wkndTarget[n] / totalWkndDays : 0;
             if (wkndExp > 0 && (wkndTarget[n] - st[n].wkndDays) / wkndExp > 0) return false;
           }
+          // R8 enforcement: at 5+ consecutive days, skip from optional fill pool on weekdays
+          // wasOCLast is exempt — R3 hard constraint forces next-day work regardless
+          if (!weekend && st[n].consec >= 5 && !st[n].wasOCLast) return false;
           return true;
         })
         .sort((a, b) => {
