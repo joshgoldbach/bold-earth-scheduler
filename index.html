@@ -1211,7 +1211,7 @@ function computeSchedule(preDays, mainDays) {
       const beeperPerson = eligible[0] || null;
       if (beeperPerson) {
         asgn[beeperPerson] = 'BEEPER';
-        onCall = beeperPerson;
+        // onCall assigned by the normal OC-selection block below (only 1 working person = auto-selected)
       } else {
         covOK = false; notes.push('No beeper coverage');
       }
