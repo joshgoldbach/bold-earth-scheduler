@@ -1064,7 +1064,7 @@ function computeSchedule(preDays, mainDays) {
   const wkndTarget    = Object.fromEntries(NAMES.map(n => [n, WKND_HARD_CAP[n]]));
 
   const st = {};
-  NAMES.forEach(n => { st[n] = { consec:0, consecOff:0, wkdayConsecOff:0, totalOff:0, consecOC:0, wasOCLast:false, ocCount:0, starts:{8:0,9:0,10:0,12:0}, total:0, week:0, wkndDays:0, twoConsecRest:false }; });
+  NAMES.forEach(n => { st[n] = { consec:0, consecOff:0, wkdayConsecOff:0, totalOff:0, consecOC:0, wasOCLast:false, ocCount:0, starts:{8:0,9:0,10:0,12:0}, total:0, week:0, wkndDays:0, restWindows:0 }; });
 
   const mainSchedule = mainDays.map((date, dayIndex) => {
     if (dow(date) === 'Mon') NAMES.forEach(n => { st[n].week = 0; });
@@ -1077,7 +1077,7 @@ function computeSchedule(preDays, mainDays) {
         const h = pd.assignments[n];
         const worked = h !== null && h !== undefined;
         if (worked) { st[n].consec++; st[n].consecOff=0; st[n].wkdayConsecOff=0; st[n].total++; st[n].week++; if (typeof h === 'number') st[n].starts[h]++; if (weekend) st[n].wkndDays++; }
-        else        { st[n].consec=0; st[n].consecOff++; if (st[n].consecOff >= 2) st[n].twoConsecRest=true; if (!weekend) st[n].wkdayConsecOff++; st[n].totalOff++; }
+        else        { st[n].consec=0; st[n].consecOff++; if (st[n].consecOff === 2) st[n].restWindows++; if (!weekend) st[n].wkdayConsecOff++; st[n].totalOff++; }
         const oc = n === pd.onCall;
         st[n].wasOCLast = oc;
         if (oc) { st[n].consecOC++; st[n].ocCount++; } else { st[n].consecOC=0; }
@@ -1290,7 +1290,9 @@ function computeSchedule(preDays, mainDays) {
           if (usedSet.has(n)) return false;
           if (urgency[n] <= 0) return false;
           // Stronger rest protection for people who haven't had a 2-day rest yet
-          if (st[n].consecOff === 1 && urgency[n] < (st[n].twoConsecRest ? 0.75 : 0.85)) return false;
+          // Sliding threshold: more prior rest windows → easier to skip (they've had their rest)
+          const restThresh = st[n].restWindows === 0 ? 0.85 : st[n].restWindows <= 2 ? 0.78 : 0.70;
+          if (st[n].consecOff === 1 && urgency[n] < restThresh) return false;
           // Pre-weekend skip (non-ET, consec>=4, wkndUrg>0): give them the day off
           if (!weekend && tomorrowIsWkndFill && !ET_STAFF.includes(n) && st[n].consec >= 4) {
             const wkndExp = totalWkndDays > 0 ? remainingWknd[dayIndex + 1] * wkndTarget[n] / totalWkndDays : 0;
@@ -1449,7 +1451,7 @@ function computeSchedule(preDays, mainDays) {
     NAMES.forEach(n => {
       const worked = asgn.hasOwnProperty(n);
       if (worked) { st[n].consec++; st[n].consecOff=0; st[n].wkdayConsecOff=0; st[n].total++; st[n].week++; st[n].starts[asgn[n]]++; if (weekend) st[n].wkndDays++; }
-      else        { st[n].consec=0; st[n].consecOff++; if (st[n].consecOff >= 2) st[n].twoConsecRest=true; if (!weekend) st[n].wkdayConsecOff++; st[n].totalOff++; }
+      else        { st[n].consec=0; st[n].consecOff++; if (st[n].consecOff === 2) st[n].restWindows++; if (!weekend) st[n].wkdayConsecOff++; st[n].totalOff++; }
       const oc = n === onCall;
       st[n].wasOCLast = oc;
       if (oc) { st[n].consecOC++; st[n].ocCount++; } else { st[n].consecOC=0; }
@@ -1692,7 +1694,7 @@ function resetJitter() {
 function scoreSchedule(sched) {
   let hard = 0, soft = 0;
   const vs = {};
-  NAMES.forEach(n => { vs[n] = { consec:0, consecOff:0, totalOff:0, consecOC:0, wasOCLast:false, wkndDays:0, ocCount:0 }; });
+  NAMES.forEach(n => { vs[n] = { consec:0, consecOff:0, totalOff:0, consecOC:0, wasOCLast:false, wkndDays:0, ocCount:0, restWindows:0 }; });
   sched.forEach((day, i) => {
     if (day.preseason) return;
     const { assignments, onCall } = day;
@@ -1708,6 +1710,7 @@ function scoreSchedule(sched) {
       else if (worked && vs[n].consec >= 5) soft++;
       if (!worked && vs[n].consecOff >= 2) soft++;
       vs[n].consec    = worked ? vs[n].consec+1 : 0;
+      if (!worked && vs[n].consecOff === 1) vs[n].restWindows++; // completing a 2-day rest
       vs[n].consecOff = worked ? 0 : vs[n].consecOff+1;
       vs[n].totalOff  = worked ? vs[n].totalOff : vs[n].totalOff+1;
       if (worked && weekend) vs[n].wkndDays++;
@@ -1724,8 +1727,11 @@ function scoreSchedule(sched) {
     if (n === 'Josh' || n === 'Jacqueline') return;
     if (vs[n].totalOff < 13 || vs[n].totalOff > 14) hard += 5;
   });
-  // Bonus: reward schedules where everyone has at least one 2-day rest
-  // (tracked externally via twoConsecRest — not available here, so approximate via consecOff patterns)
+  // Penalize uneven rest-window distribution among core staff
+  const coreNames = NAMES.filter(n => n !== 'Jacqueline' && !WEEKDAY_ONLY.has(n));
+  const restCounts = coreNames.map(n => vs[n].restWindows);
+  const avgRest = restCounts.reduce((a,b) => a+b, 0) / restCounts.length;
+  restCounts.forEach(c => { if (Math.abs(c - avgRest) > 1.5) soft += 2; });
   return hard * 100 + soft;
 }
 
@@ -1965,12 +1971,11 @@ function renderStats() {
   const OFF_DISPLAY_TARGET = { 'Josh': 10, 'Jacqueline': 14 };
   const offDisplayTarget = n => OFF_DISPLAY_TARGET[n] ?? 14;
 
-  NAMES.forEach(n => {
+  NAMES.filter(n => n !== 'Jacqueline').forEach(n => {
     const cap = offDisplayTarget(n);
     const offColor = s[n].off > cap ? 'color:#dc2626;font-weight:700' : 'color:#057a55;font-weight:700';
     const p = TEAM.find(t => t.name === n);
-    const notesTag = p.weekdayOnly ? ' <span style="font-size:0.7rem;color:#6d28d9;font-weight:600">M-F</span>' : '';
-    html += `<tr><td>${n}${notesTag}</td><td style="color:#888">${p.tz}</td>`;
+    html += `<tr><td>${n}</td><td style="color:#888">${p.tz}</td>`;
     const ocCap = OC_HARD_CAP[n];
     const ocDisplay = ocCap !== undefined ? `${s[n].oc}/${ocCap}` : `${s[n].oc}`;
     const ocColor = ocCap !== undefined && s[n].oc > ocCap ? 'color:#dc2626;font-weight:700' : '';
@@ -1998,7 +2003,7 @@ function renderStats() {
   });
   const wtbl = document.getElementById('weekend-table');
   let whtml = '<thead><tr><th>Person</th><th>Weekend Days Worked</th><th>2-Day Rest Windows</th></tr></thead><tbody>';
-  NAMES.forEach(n => {
+  NAMES.filter(n => n !== 'Jacqueline').forEach(n => {
     whtml += `<tr><td>${n}</td><td>${s[n].satWork + s[n].sunWork}</td><td>${twoConsecOffCount[n]}</td></tr>`;
   });
   whtml += '</tbody>';
