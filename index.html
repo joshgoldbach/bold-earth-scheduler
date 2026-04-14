@@ -213,6 +213,12 @@
   .schedule-locked .shift-sel, .schedule-locked .oncall-sel { pointer-events:none; appearance:none; -webkit-appearance:none; padding-right:0; }
   .btn-lock-active { background:var(--red) !important; color:white !important; }
 
+  /* Pin */
+  .pin-btn { background:none; border:none; cursor:pointer; font-size:0.7rem; padding:0 3px 0 0; opacity:0.2; line-height:1; vertical-align:middle; }
+  .pin-btn:hover { opacity:0.8; }
+  .pin-btn.pin-active { opacity:1; }
+  tr.row-pinned td.col-date { border-left:3px solid var(--gold); }
+
   /* Time-off */
   .timeoff-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.82rem; }
   .timeoff-item:last-child { border-bottom: none; }
@@ -598,7 +604,7 @@ const WKND_LOW = new Set(['Ali', 'Josh']);
 const WKND_HARD_CAP = { 'Josh': 5, 'Izzy': 6, 'Ali': 3, 'Kayla': 6, 'Holly': 6, 'Bryan': 6, 'Emily': 3, 'Jacqueline': 0 };
 // Hard cap: max on-call nights per person.
 // Izzy and Kayla capped at 8 so overflow flows to Holly, guaranteeing Holly >= Izzy and Holly >= Bryan.
-const OC_HARD_CAP   = { 'Josh': 4, 'Izzy': 8, 'Ali': 4, 'Kayla': 8, 'Bryan': 9, 'Emily': 4, 'Jacqueline': 0 };
+const OC_HARD_CAP   = { 'Josh': 4, 'Izzy': 8, 'Ali': 4, 'Kayla': 8, 'Holly': 12, 'Bryan': 9, 'Emily': 4, 'Jacqueline': 0 };
 // R5 carve-out: Josh has a reduced days-off cap (10); Jacqueline weekday-only so 14 off (weekends); others default to 15.
 const MAX_OFF_PER   = { 'Josh': 10, 'Jacqueline': 14 };
 const maxOffFor     = n => MAX_OFF_PER[n] ?? 14;
@@ -611,6 +617,39 @@ function fmtDate(d)  { const dt = parseDateStr(d); return `${dt.getMonth()+1}/${
 // ============================================================
 const TIMEOFF_KEY = 'scheduler_timeoff_requests';
 let timeOffRequests = [];
+
+// ============================================================
+// PINNED DAYS — survive regeneration
+// ============================================================
+const PINNED_KEY = 'scheduler_pinned_days';
+let pinnedDays = {};   // { "YYYY-MM-DD": { assignments, onCall, coverageOK, notes } }
+
+function loadPinnedDays() {
+  try { pinnedDays = JSON.parse(localStorage.getItem(PINNED_KEY) || '{}'); } catch(e) { pinnedDays = {}; }
+}
+
+function savePinnedDays() {
+  localStorage.setItem(PINNED_KEY, JSON.stringify(pinnedDays));
+}
+
+function togglePin(di) {
+  const day = schedule[di];
+  if (!day || day.preseason) return;
+  if (pinnedDays[day.date]) {
+    delete pinnedDays[day.date];
+  } else {
+    pinnedDays[day.date] = {
+      assignments: { ...day.assignments },
+      onCall:      day.onCall,
+      coverageOK:  day.coverageOK,
+      notes:       day.notes,
+    };
+  }
+  savePinnedDays();
+  renderTable();
+  const count = Object.keys(pinnedDays).length;
+  toast(count ? `${count} day(s) pinned — will survive next regeneration.` : 'Day unpinned.');
+}
 
 function saveTimeOffToStorage() {
   localStorage.setItem(TIMEOFF_KEY, JSON.stringify(timeOffRequests));
@@ -1020,6 +1059,22 @@ function computeSchedule(preDays, mainDays) {
 
   const mainSchedule = mainDays.map((date, dayIndex) => {
     if (dow(date) === 'Mon') NAMES.forEach(n => { st[n].week = 0; });
+
+    // ---- Pinned day: skip greedy computation, use saved assignments ----
+    if (pinnedDays[date]) {
+      const pd = pinnedDays[date];
+      const weekend = isWknd(date);
+      NAMES.forEach(n => {
+        const h = pd.assignments[n];
+        const worked = h !== null && h !== undefined;
+        if (worked) { st[n].consec++; st[n].consecOff=0; st[n].wkdayConsecOff=0; st[n].total++; st[n].week++; if (typeof h === 'number') st[n].starts[h]++; if (weekend) st[n].wkndDays++; }
+        else        { st[n].consec=0; st[n].consecOff++; if (st[n].consecOff >= 2) st[n].twoConsecRest=true; if (!weekend) st[n].wkdayConsecOff++; st[n].totalOff++; }
+        const oc = n === pd.onCall;
+        st[n].wasOCLast = oc;
+        if (oc) { st[n].consecOC++; st[n].ocCount++; } else { st[n].consecOC=0; }
+      });
+      return { date, assignments: { ...pd.assignments }, onCall: pd.onCall, coverageOK: pd.coverageOK ?? true, notes: pd.notes || '', pinned: true };
+    }
 
     const weekend  = isWknd(date);
     const daysLeft = totalDays - dayIndex;
@@ -1664,11 +1719,17 @@ function renderTable() {
   html += '</tr></thead><tbody>';
 
   schedule.forEach((day, di) => {
+    const isPinned = !day.preseason && !!pinnedDays[day.date];
     const classes = [];
     if (isWknd(day.date)) classes.push('weekend');
     if (day.preseason)    classes.push('preseason');
+    if (isPinned)         classes.push('row-pinned');
     html += `<tr${classes.length ? ` class="${classes.join(' ')}"` : ''}>`;
-    html += `<td class="col-date">${fmtDate(day.date)}</td>`;
+    if (!day.preseason) {
+      html += `<td class="col-date"><button class="pin-btn${isPinned ? ' pin-active' : ''}" onclick="togglePin(${di})" title="${isPinned ? 'Unpin (allow regeneration to overwrite)' : 'Pin this day (survives regeneration)'}">📌</button>${fmtDate(day.date)}</td>`;
+    } else {
+      html += `<td class="col-date">${fmtDate(day.date)}</td>`;
+    }
     html += `<td class="col-day">${dow(day.date)}</td>`;
 
     // Pre-season rows: editable dropdowns
@@ -1856,7 +1917,10 @@ function renderStats() {
     const p = TEAM.find(t => t.name === n);
     const notesTag = p.weekdayOnly ? ' <span style="font-size:0.7rem;color:#6d28d9;font-weight:600">M-F</span>' : '';
     html += `<tr><td>${n}${notesTag}</td><td style="color:#888">${p.tz}</td>`;
-    html += `<td>${s[n].total}</td><td style="${offColor}">${s[n].off}/${cap}</td><td>${s[n].oc}</td>`;
+    const ocCap = OC_HARD_CAP[n];
+    const ocDisplay = ocCap !== undefined ? `${s[n].oc}/${ocCap}` : `${s[n].oc}`;
+    const ocColor = ocCap !== undefined && s[n].oc > ocCap ? 'color:#dc2626;font-weight:700' : '';
+    html += `<td>${s[n].total}</td><td style="${offColor}">${s[n].off}/${cap}</td><td style="${ocColor}">${ocDisplay}</td>`;
     VALID_STARTS.forEach(h => html += `<td>${s[n].starts[h]||0}</td>`);
     html += '</tr>';
   });
@@ -2431,6 +2495,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTimeOffList();
   loadTrainingFromStorage();
   renderTrainingList();
+  loadPinnedDays();
   // Auto-load the master schedule from Firestore
   loadMaster();
 });
