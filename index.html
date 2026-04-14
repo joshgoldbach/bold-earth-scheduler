@@ -1982,23 +1982,24 @@ function renderStats() {
   tbl.innerHTML = html;
 
   // --- Weekend tracker ---
-  // Count full weekends off (both Sat + Sun off) per person
-  const fullWeekendsOff = Object.fromEntries(NAMES.map(n => [n, 0]));
+  // Count how many times each person had 2+ consecutive days off (any days, not just Sat/Sun)
+  const twoConsecOffCount = Object.fromEntries(NAMES.map(n => [n, 0]));
   const mainDays = schedule.filter(d => !d.preseason);
-  for (let i = 0; i < mainDays.length - 1; i++) {
-    if (dow(mainDays[i].date) === 'Sat' && dow(mainDays[i+1].date) === 'Sun') {
-      NAMES.forEach(n => {
-        if (mainDays[i].assignments[n] === null && mainDays[i+1].assignments[n] === null) {
-          fullWeekendsOff[n]++;
-        }
-      });
-    }
-  }
-  const totalFullWknds = totalSats; // one Sat per weekend pair
-  const wtbl = document.getElementById('weekend-table');
-  let whtml = '<thead><tr><th>Person</th><th>Weekend Days Worked</th><th>Full Weekends Off</th></tr></thead><tbody>';
   NAMES.forEach(n => {
-    whtml += `<tr><td>${n}</td><td>${s[n].satWork + s[n].sunWork}</td><td>${fullWeekendsOff[n]}/${totalFullWknds}</td></tr>`;
+    let streak = 0;
+    mainDays.forEach(day => {
+      if (day.assignments[n] === null) {
+        streak++;
+        if (streak === 2) twoConsecOffCount[n]++; // count each time a 2-day rest is completed
+      } else {
+        streak = 0;
+      }
+    });
+  });
+  const wtbl = document.getElementById('weekend-table');
+  let whtml = '<thead><tr><th>Person</th><th>Weekend Days Worked</th><th>2-Day Rest Windows</th></tr></thead><tbody>';
+  NAMES.forEach(n => {
+    whtml += `<tr><td>${n}</td><td>${s[n].satWork + s[n].sunWork}</td><td>${twoConsecOffCount[n]}</td></tr>`;
   });
   whtml += '</tbody>';
   wtbl.innerHTML = whtml;
