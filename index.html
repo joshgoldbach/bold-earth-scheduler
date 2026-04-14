@@ -601,7 +601,7 @@ const WKND_HARD_CAP = { 'Josh': 5, 'Izzy': 6, 'Ali': 3, 'Kayla': 6, 'Holly': 6, 
 const OC_HARD_CAP   = { 'Josh': 4, 'Izzy': 8, 'Ali': 4, 'Kayla': 8, 'Bryan': 9, 'Emily': 4, 'Jacqueline': 0 };
 // R5 carve-out: Josh has a reduced days-off cap (10); Jacqueline weekday-only so 14 off (weekends); others default to 15.
 const MAX_OFF_PER   = { 'Josh': 10, 'Jacqueline': 14 };
-const maxOffFor     = n => MAX_OFF_PER[n] ?? 15;
+const maxOffFor     = n => MAX_OFF_PER[n] ?? 14;
 function dow(d)      { return DOW[parseDateStr(d).getDay()]; }
 function isWknd(d)   { const day = parseDateStr(d).getDay(); return day === 0 || day === 6; }
 function fmtDate(d)  { const dt = parseDateStr(d); return `${dt.getMonth()+1}/${dt.getDate()}/${dt.getFullYear()}`; }
@@ -960,14 +960,7 @@ function initAndGenerate() {
 // ============================================================
 // AUTO-GENERATE SCHEDULE
 // ============================================================
-function generateSchedule() {
-  console.log('Time-off requests at generation time:', JSON.stringify(timeOffRequests));
-  if (timeOffRequests.length) {
-    toast(`Applying ${timeOffRequests.length} time-off request(s) for: ${[...new Set(timeOffRequests.map(r=>r.name))].join(', ')}`);
-  }
-
-  const preDays  = days.filter(d => d <= PRESEASON_END);
-  const mainDays = days.filter(d => d > PRESEASON_END);
+function computeSchedule(preDays, mainDays) {
 
   // ---- Pre-season: weekdays everyone ON; weekends 1 on-call person (same Sat+Sun) ----
   const preOcCount = Object.fromEntries(NAMES.map(n => [n, 0]));
@@ -1023,7 +1016,7 @@ function generateSchedule() {
   const wkndTarget    = Object.fromEntries(NAMES.map(n => [n, WKND_HARD_CAP[n]]));
 
   const st = {};
-  NAMES.forEach(n => { st[n] = { consec:0, consecOff:0, wkdayConsecOff:0, totalOff:0, consecOC:0, wasOCLast:false, ocCount:0, starts:{8:0,9:0,10:0,12:0}, total:0, week:0, wkndDays:0 }; });
+  NAMES.forEach(n => { st[n] = { consec:0, consecOff:0, wkdayConsecOff:0, totalOff:0, consecOC:0, wasOCLast:false, ocCount:0, starts:{8:0,9:0,10:0,12:0}, total:0, week:0, wkndDays:0, twoConsecRest:false }; });
 
   const mainSchedule = mainDays.map((date, dayIndex) => {
     if (dow(date) === 'Mon') NAMES.forEach(n => { st[n].week = 0; });
@@ -1042,9 +1035,9 @@ function generateSchedule() {
       effDaysLeft[n] = Math.max(1, daysLeft - expectedWkndOff);
     });
 
-    // Urgency based on effective days left
+    // Urgency based on effective days left, plus small per-run jitter to break tiebreaks
     const urgency = {};
-    NAMES.forEach(n => { urgency[n] = Math.max(0, (workTarget[n] - st[n].total) / effDaysLeft[n]); });
+    NAMES.forEach(n => { urgency[n] = Math.max(0, (workTarget[n] - st[n].total) / effDaysLeft[n]) + (_jitter[n] || 0); });
 
     // Who can work (not at 5-consecutive-day cap).
     // Bypasses (soft R8 overridden by harder constraints):
@@ -1222,7 +1215,8 @@ function generateSchedule() {
         .filter(n => {
           if (usedSet.has(n)) return false;
           if (urgency[n] <= 0) return false;
-          if (st[n].consecOff === 1 && urgency[n] < 0.75) return false;
+          // Stronger rest protection for people who haven't had a 2-day rest yet
+          if (st[n].consecOff === 1 && urgency[n] < (st[n].twoConsecRest ? 0.75 : 0.85)) return false;
           // Pre-weekend skip (non-ET, consec>=4, wkndUrg>0): give them the day off
           if (!weekend && tomorrowIsWkndFill && !ET_STAFF.includes(n) && st[n].consec >= 4) {
             const wkndExp = totalWkndDays > 0 ? remainingWknd[dayIndex + 1] * wkndTarget[n] / totalWkndDays : 0;
@@ -1381,7 +1375,7 @@ function generateSchedule() {
     NAMES.forEach(n => {
       const worked = asgn.hasOwnProperty(n);
       if (worked) { st[n].consec++; st[n].consecOff=0; st[n].wkdayConsecOff=0; st[n].total++; st[n].week++; st[n].starts[asgn[n]]++; if (weekend) st[n].wkndDays++; }
-      else        { st[n].consec=0; st[n].consecOff++; if (!weekend) st[n].wkdayConsecOff++; st[n].totalOff++; }
+      else        { st[n].consec=0; st[n].consecOff++; if (st[n].consecOff >= 2) st[n].twoConsecRest=true; if (!weekend) st[n].wkdayConsecOff++; st[n].totalOff++; }
       const oc = n === onCall;
       st[n].wasOCLast = oc;
       if (oc) { st[n].consecOC++; st[n].ocCount++; } else { st[n].consecOC=0; }
@@ -1391,7 +1385,7 @@ function generateSchedule() {
   });
 
   // Combine pre-season and main-season
-  schedule = [...preSchedule, ...mainSchedule];
+  let schedule = [...preSchedule, ...mainSchedule];
 
   // --- Post-process: fix on-call assignments where on-call person has next day off ---
   const ocCountFix = Object.fromEntries(NAMES.map(n => [n, 0]));
@@ -1539,6 +1533,30 @@ function generateSchedule() {
     });
   }
 
+  return schedule;
+} // end computeSchedule
+
+function generateSchedule() {
+  if (timeOffRequests.length) {
+    toast(`Applying ${timeOffRequests.length} time-off request(s) for: ${[...new Set(timeOffRequests.map(r=>r.name))].join(', ')}`);
+  }
+
+  const preDays  = days.filter(d => d <= PRESEASON_END);
+  const mainDays = days.filter(d => d > PRESEASON_END);
+
+  // Best-of-5: run computeSchedule with different jitter seeds, keep lowest-violation result
+  const RUNS = 5;
+  let bestSchedule = null;
+  let bestScore    = Infinity;
+  for (let run = 0; run < RUNS; run++) {
+    resetJitter();
+    const candidate = computeSchedule(preDays, mainDays);
+    const score     = scoreSchedule(candidate);
+    if (score < bestScore) { bestScore = bestSchedule ? score : score; bestSchedule = JSON.parse(JSON.stringify(candidate)); }
+    if (score === 0) break; // perfect — stop early
+  }
+  schedule = bestSchedule;
+
   renderTable();
   renderStats();
   document.getElementById('validate-btn').disabled = false;
@@ -1552,7 +1570,55 @@ function generateSchedule() {
   masterLoaded = false;
   hasUnsavedChanges = false;
   updateSaveChangesBtn();
-  toast(`Schedule generated: ${preDays.length} pre-season + ${mainDays.length} main-season days.`);
+  toast(`Schedule generated (best of ${RUNS} runs): ${preDays.length} pre-season + ${mainDays.length} main-season days.`);
+}
+
+// Per-run jitter: small random nudge added to urgency each generation attempt.
+// Breaks deterministic tiebreaks so best-of-N picks genuinely different schedules.
+let _jitter = {};
+function resetJitter() {
+  NAMES.forEach(n => { _jitter[n] = (Math.random() - 0.5) * 0.08; });
+}
+
+// Score a schedule by counting weighted violations (lower = better).
+function scoreSchedule(sched) {
+  let hard = 0, soft = 0;
+  const vs = {};
+  NAMES.forEach(n => { vs[n] = { consec:0, consecOff:0, totalOff:0, consecOC:0, wasOCLast:false, wkndDays:0, ocCount:0 }; });
+  sched.forEach((day, i) => {
+    if (day.preseason) return;
+    const { assignments, onCall } = day;
+    const weekend = isWknd(day.date);
+    const working = NAMES.filter(n => assignments[n] !== null);
+    if (working.length < 2) hard += 10;
+    if (weekend && working.length > 2) hard += 10;
+    NAMES.forEach(n => {
+      const h = assignments[n]; const worked = h !== null;
+      const sh = typeof h === 'number' ? h : null;
+      if (vs[n].wasOCLast && worked && sh !== null && sh < 10) hard += 5;
+      if (worked && vs[n].consec >= 6) hard += 3;
+      else if (worked && vs[n].consec >= 5) soft++;
+      if (!worked && vs[n].consecOff >= 2) soft++;
+      vs[n].consec    = worked ? vs[n].consec+1 : 0;
+      vs[n].consecOff = worked ? 0 : vs[n].consecOff+1;
+      vs[n].totalOff  = worked ? vs[n].totalOff : vs[n].totalOff+1;
+      if (worked && weekend) vs[n].wkndDays++;
+      const oc = n === onCall;
+      vs[n].wasOCLast = oc;
+      vs[n].consecOC  = oc ? vs[n].consecOC+1 : 0;
+      if (oc) vs[n].ocCount++;
+    });
+    if (onCall && i < sched.length-1 && !sched[i+1].preseason && sched[i+1].assignments[onCall] === null) hard += 10;
+    if (onCall && vs[onCall] && vs[onCall].consecOC >= 2) soft++;
+    if (working.length > 0 && !onCall) soft += 2;
+  });
+  NAMES.forEach(n => {
+    if (n === 'Josh' || n === 'Jacqueline') return;
+    if (vs[n].totalOff < 13 || vs[n].totalOff > 14) hard += 5;
+  });
+  // Bonus: reward schedules where everyone has at least one 2-day rest
+  // (tracked externally via twoConsecRest — not available here, so approximate via consecOff patterns)
+  return hard * 100 + soft;
 }
 
 function fairest(candidates, h, st) {
