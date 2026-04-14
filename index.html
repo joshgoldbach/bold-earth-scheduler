@@ -1290,8 +1290,9 @@ function computeSchedule(preDays, mainDays) {
           if (usedSet.has(n)) return false;
           if (urgency[n] <= 0) return false;
           // Stronger rest protection for people who haven't had a 2-day rest yet
-          // Sliding threshold: more prior rest windows → easier to skip (they've had their rest)
-          const restThresh = st[n].restWindows === 0 ? 0.85 : st[n].restWindows <= 2 ? 0.78 : 0.70;
+          // Protect people who haven't had any 2-day rest yet (higher threshold = harder to pull in)
+          // Don't lower threshold for high-rest-window people — that creates longer work streaks.
+          const restThresh = st[n].restWindows === 0 ? 0.85 : 0.75;
           if (st[n].consecOff === 1 && urgency[n] < restThresh) return false;
           // Pre-weekend skip (non-ET, consec>=4, wkndUrg>0): give them the day off
           if (!weekend && tomorrowIsWkndFill && !ET_STAFF.includes(n) && st[n].consec >= 4) {
@@ -1614,7 +1615,8 @@ function computeSchedule(preDays, mainDays) {
 
   // Safety pass: definitively enforce the 6-consecutive-day hard cap.
   // Post-processors can interact to create streaks longer than 6 in edge cases.
-  // This sweeps for any person working ≥ 7 consecutive main-season days and removes one.
+  // Bug fix: after removing a day, reset streak to only days AFTER the gap — otherwise
+  // the array stays non-consecutive but still triggers on subsequent work days.
   NAMES.forEach(n => {
     if (WEEKDAY_ONLY.has(n)) return;
     let streak = [];
@@ -1627,16 +1629,16 @@ function computeSchedule(preDays, mainDays) {
         streak = [];
       }
       if (streak.length >= 7) {
-        // Find the best day to remove: not the day after on-call (R3), not a weekend 2-person day
         for (let s = streak.length - 1; s >= 0; s--) {
           const ri = streak[s];
           const prevOC = ri > 0 && schedule[ri - 1].onCall === n;
-          if (prevOC) continue; // can't remove — R3 forces work
+          if (prevOC) continue;
           schedule[ri].assignments[n] = null;
           const gaps = coverageGaps(schedule[ri].assignments);
           schedule[ri].coverageOK = gaps.length === 0;
           schedule[ri].notes = (schedule[ri].notes ? schedule[ri].notes + '; ' : '') + `${n} forced off (6-day cap)`;
           streak.splice(s, 1);
+          streak = streak.slice(s); // keep only days after the gap; reset the streak
           break;
         }
       }
@@ -1727,11 +1729,13 @@ function scoreSchedule(sched) {
     if (n === 'Josh' || n === 'Jacqueline') return;
     if (vs[n].totalOff < 13 || vs[n].totalOff > 14) hard += 5;
   });
-  // Penalize uneven rest-window distribution among core staff
+  // Reward schedules where everyone gets at least a few 2-day rest windows.
+  // Incentivize raising the floor (min count) rather than penalizing high counts,
+  // which would cause the scheduler to work high-rest-window people harder.
   const coreNames = NAMES.filter(n => n !== 'Jacqueline' && !WEEKDAY_ONLY.has(n));
   const restCounts = coreNames.map(n => vs[n].restWindows);
-  const avgRest = restCounts.reduce((a,b) => a+b, 0) / restCounts.length;
-  restCounts.forEach(c => { if (Math.abs(c - avgRest) > 1.5) soft += 2; });
+  const minRest = Math.min(...restCounts);
+  if (minRest < 3) soft += (3 - minRest) * 3; // push to give everyone at least 3 rest windows
   return hard * 100 + soft;
 }
 
