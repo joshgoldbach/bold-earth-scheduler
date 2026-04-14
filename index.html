@@ -1597,6 +1597,37 @@ function computeSchedule(preDays, mainDays) {
     });
   }
 
+  // Safety pass: definitively enforce the 6-consecutive-day hard cap.
+  // Post-processors can interact to create streaks longer than 6 in edge cases.
+  // This sweeps for any person working ≥ 7 consecutive main-season days and removes one.
+  NAMES.forEach(n => {
+    if (WEEKDAY_ONLY.has(n)) return;
+    let streak = [];
+    for (let di = 0; di < schedule.length; di++) {
+      const day = schedule[di];
+      if (day.preseason) { streak = []; continue; }
+      if (day.assignments[n] !== null) {
+        streak.push(di);
+      } else {
+        streak = [];
+      }
+      if (streak.length >= 7) {
+        // Find the best day to remove: not the day after on-call (R3), not a weekend 2-person day
+        for (let s = streak.length - 1; s >= 0; s--) {
+          const ri = streak[s];
+          const prevOC = ri > 0 && schedule[ri - 1].onCall === n;
+          if (prevOC) continue; // can't remove — R3 forces work
+          schedule[ri].assignments[n] = null;
+          const gaps = coverageGaps(schedule[ri].assignments);
+          schedule[ri].coverageOK = gaps.length === 0;
+          schedule[ri].notes = (schedule[ri].notes ? schedule[ri].notes + '; ' : '') + `${n} forced off (6-day cap)`;
+          streak.splice(s, 1);
+          break;
+        }
+      }
+    }
+  });
+
   return schedule;
 } // end computeSchedule
 
