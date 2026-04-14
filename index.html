@@ -1493,6 +1493,12 @@ function computeSchedule(preDays, mainDays) {
       }
     } else { covOK = false; notes.push('No staff scheduled'); }
 
+    // ---- Beeper weekend: on-call must be the beeper person (override OC selection) ----
+    if (beeperWeekend) {
+      const beeperPerson = Object.keys(asgn).find(n => asgn[n] === 'BEEPER') || null;
+      onCall = beeperPerson;
+    }
+
     // ---- Coverage gaps (skip on beeper weekends — single-person on-call mode) ----
     if (!beeperWeekend) {
       const gaps = coverageGaps(asgn);
