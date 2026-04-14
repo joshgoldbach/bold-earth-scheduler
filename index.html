@@ -140,6 +140,8 @@
   td.sON    { background: #dcfce7 !important; }
   td.sTRAIN { background: #fef9c3 !important; }
   td.sFIELD { background: #e0f2fe !important; }  /* field = sky blue */
+  td.sLEAVE { background: #f3f4f6 !important; color: #9ca3af; font-size:0.72rem; text-align:center; }
+  td.sBEEPER { background: #ede9fe !important; }
   /* Override preseason row !important so colored cells still show their colors */
   #schedule-table tr.preseason td.sON    { background: #dcfce7 !important; color: #166534; }
   #schedule-table tr.preseason td.sTRAIN { background: #fef9c3 !important; color: #92400e; }
@@ -610,6 +612,15 @@ const OC_HARD_CAP   = { 'Josh': 4, 'Izzy': 8, 'Ali': 4, 'Kayla': 8, 'Holly': 12,
 // R5 carve-out: Josh has a reduced days-off cap (10); Jacqueline weekday-only so 14 off (weekends); others default to 15.
 const MAX_OFF_PER   = { 'Josh': 10, 'Jacqueline': 14 };
 const maxOffFor     = n => MAX_OFF_PER[n] ?? 14;
+// Kayla is off-duty (field/travel) on these weekdays — they don't count as days off for R5.
+// Weekend days during the same period (8/1, 8/2, 8/8, 8/9) count normally as days off.
+const KAYLA_LEAVE_WEEKDAYS = new Set([
+  '2026-07-29', '2026-07-30', '2026-07-31',
+  '2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06', '2026-08-07',
+  '2026-08-10'
+]);
+// From 8/1 onwards, weekends shift to single-beeper coverage (one person, on-call duty only).
+const BEEPER_WKND_START = '2026-08-01';
 function dow(d)      { return DOW[parseDateStr(d).getDay()]; }
 function isWknd(d)   { const day = parseDateStr(d).getDay(); return day === 0 || day === 6; }
 function fmtDate(d)  { const dt = parseDateStr(d); return `${dt.getMonth()+1}/${dt.getDate()}/${dt.getFullYear()}`; }
@@ -1050,7 +1061,11 @@ function computeSchedule(preDays, mainDays) {
 
   // ---- Main season (Jun 25 – Aug 10) ----
   const totalDays = mainDays.length;
-  const workTarget = Object.fromEntries(NAMES.map(n => [n, Math.max(0, totalDays - maxOffFor(n))]));
+  // Kayla's leave weekdays are excluded from her scheduling period — reduce her work target accordingly.
+  const workTarget = Object.fromEntries(NAMES.map(n => {
+    const leaveDays = n === 'Kayla' ? KAYLA_LEAVE_WEEKDAYS.size : 0;
+    return [n, Math.max(0, totalDays - leaveDays - maxOffFor(n))];
+  }));
 
   // Pre-compute remaining weekend days from each position forward (main season only)
   const remainingWknd = mainDays.map((_, i) => {
@@ -1075,6 +1090,7 @@ function computeSchedule(preDays, mainDays) {
       const weekend = isWknd(date);
       NAMES.forEach(n => {
         const h = pd.assignments[n];
+        if (h === 'LEAVE') { st[n].consec=0; st[n].consecOff=0; st[n].wasOCLast=false; st[n].consecOC=0; return; }
         const worked = h !== null && h !== undefined;
         if (worked) { st[n].consec++; st[n].consecOff=0; st[n].wkdayConsecOff=0; st[n].total++; st[n].week++; if (typeof h === 'number') st[n].starts[h]++; if (weekend) st[n].wkndDays++; }
         else        { st[n].consec=0; st[n].consecOff++; if (st[n].consecOff === 2) st[n].restWindows++; if (!weekend) st[n].wkdayConsecOff++; st[n].totalOff++; }
@@ -1114,6 +1130,8 @@ function computeSchedule(preDays, mainDays) {
       // Requested day off / training always wins — supercedes all other rules including R3 (wasOCLast)
       if (isRequestedOff(n, date)) return false;
       if (isTraining(n, date)) return false;
+      // Kayla is off-duty (leave) on specific weekdays — excluded from scheduling; not counted as days off
+      if (KAYLA_LEAVE_WEEKDAYS.has(date) && n === 'Kayla') return false;
       // Weekday-only staff never work weekends
       if (WEEKDAY_ONLY.has(n) && isWknd(date)) return false;
       // HARD CAP: never work more than 6 consecutive days, even for R3 (wasOCLast).
@@ -1170,7 +1188,36 @@ function computeSchedule(preDays, mainDays) {
         notes.push(`R3 conflict: ${n} was on-call last night but has a requested day off today`);
     });
 
-    if (weekend) {
+    const beeperWeekend = weekend && date >= BEEPER_WKND_START;
+
+    if (beeperWeekend) {
+      // ---- BEEPER WEEKEND (8/1+): single on-call/beeper person, reduced coverage ----
+      const wkndUrg = n => {
+        const expected = totalWkndDays > 0 ? wkndLeft * wkndTarget[n] / totalWkndDays : 0;
+        return expected > 0 ? Math.max(0, (wkndTarget[n] - st[n].wkndDays) / expected) : 0;
+      };
+      const capOK = n => !(WKND_HARD_CAP[n] !== undefined && st[n].wkndDays >= WKND_HARD_CAP[n]);
+      const eligible = workable.filter(n => {
+        if (st[n].wasOCLast) return true;
+        if (!capOK(n)) return false;
+        return wkndUrg(n) > 0 || mustWorkSet.has(n);
+      }).sort((a, b) => {
+        const am = mustWorkSet.has(a) ? 0 : 1, bm = mustWorkSet.has(b) ? 0 : 1;
+        if (am !== bm) return am - bm;
+        const diff = wkndUrg(b) - wkndUrg(a);
+        if (Math.abs(diff) > 0.001) return diff;
+        return urgency[b] - urgency[a];
+      });
+      const beeperPerson = eligible[0] || null;
+      if (beeperPerson) {
+        asgn[beeperPerson] = 'BEEPER';
+        onCall = beeperPerson;
+      } else {
+        covOK = false; notes.push('No beeper coverage');
+      }
+      // No coverage gap check on beeper weekends — single-person on-call duty only
+
+    } else if (weekend) {
       // ---- WEEKEND: select exactly 2 workers ----
       // Normalized urgency: (target - days) / (wkndLeft * target / total).
       // Measures deficit vs expected pace so everyone starts at 1.0 priority,
@@ -1446,15 +1493,26 @@ function computeSchedule(preDays, mainDays) {
       }
     } else { covOK = false; notes.push('No staff scheduled'); }
 
-    // ---- Coverage gaps ----
-    const gaps = coverageGaps(asgn);
-    if (gaps.length) { covOK = false; notes.push(`Gap: ${gaps.map(h => h<12?h+'AM':h===12?'12PM':(h-12)+'PM').join(', ')}`); }
+    // ---- Coverage gaps (skip on beeper weekends — single-person on-call mode) ----
+    if (!beeperWeekend) {
+      const gaps = coverageGaps(asgn);
+      if (gaps.length) { covOK = false; notes.push(`Gap: ${gaps.map(h => h<12?h+'AM':h===12?'12PM':(h-12)+'PM').join(', ')}`); }
+    }
 
     // ---- Update state ----
-    const dayAsgn = Object.fromEntries(NAMES.map(n => [n, asgn.hasOwnProperty(n) ? asgn[n] : null]));
+    // Kayla's leave weekdays: mark as LEAVE (not off, not worked — excluded from period).
+    const dayAsgn = Object.fromEntries(NAMES.map(n => {
+      if (KAYLA_LEAVE_WEEKDAYS.has(date) && n === 'Kayla') return [n, 'LEAVE'];
+      return [n, asgn.hasOwnProperty(n) ? asgn[n] : null];
+    }));
     NAMES.forEach(n => {
+      if (KAYLA_LEAVE_WEEKDAYS.has(date) && n === 'Kayla') {
+        // Leave day: reset streaks, no totalOff/total increment
+        st[n].consec = 0; st[n].consecOff = 0; st[n].wasOCLast = false; st[n].consecOC = 0;
+        return;
+      }
       const worked = asgn.hasOwnProperty(n);
-      if (worked) { st[n].consec++; st[n].consecOff=0; st[n].wkdayConsecOff=0; st[n].total++; st[n].week++; st[n].starts[asgn[n]]++; if (weekend) st[n].wkndDays++; }
+      if (worked) { st[n].consec++; st[n].consecOff=0; st[n].wkdayConsecOff=0; st[n].total++; st[n].week++; if (typeof asgn[n] === 'number') st[n].starts[asgn[n]]++; if (weekend) st[n].wkndDays++; }
       else        { st[n].consec=0; st[n].consecOff++; if (st[n].consecOff === 2) st[n].restWindows++; if (!weekend) st[n].wkdayConsecOff++; st[n].totalOff++; }
       const oc = n === onCall;
       st[n].wasOCLast = oc;
@@ -1529,6 +1587,7 @@ function computeSchedule(preDays, mainDays) {
       const day = schedule[di];
       if (day.preseason) continue;               // pre-season days are not subject to days-off cap
       if (isWknd(day.date)) continue;           // weekends hard-capped at 2
+      if (KAYLA_LEAVE_WEEKDAYS.has(day.date) && n === 'Kayla') continue; // leave days are excluded
       if (day.assignments[n] !== null) continue; // already working this day
       if (isRequestedOff(n, day.date) || isTraining(n, day.date)) continue; // protected — never override
       const prevWasOC = di > 0 && schedule[di - 1].onCall === n;
@@ -1555,11 +1614,14 @@ function computeSchedule(preDays, mainDays) {
     const p = TEAM.find(t => t.name === n);
     for (let pass = 0; pass < 4; pass++) {
       // If person is already at or over their work target, long rests are intentional — skip R7.
-      const currentTotal = schedule.filter(d => !d.preseason && d.assignments[n] !== null).length;
+      // Exclude LEAVE days from the count — they don't contribute to Kayla's work total.
+      const currentTotal = schedule.filter(d => !d.preseason && d.assignments[n] !== null && d.assignments[n] !== 'LEAVE').length;
       if (currentTotal >= workTarget[n]) break;
       let consecOff = 0, fixed = false;
       for (let di = 0; di < schedule.length; di++) {
         if (schedule[di].preseason) { consecOff = 0; continue; } // ignore pre-season days
+        // LEAVE days break the off-streak (Kayla is away, not resting) — treat as non-null
+        if (schedule[di].assignments[n] === 'LEAVE') { consecOff = 0; continue; }
         if (schedule[di].assignments[n] === null) {
           consecOff++;
           if (consecOff >= 3) {
@@ -1570,6 +1632,7 @@ function computeSchedule(preDays, mainDays) {
             if (allRequested) break;
             for (let ti = streakStart; ti <= di; ti++) {
               if (isWknd(schedule[ti].date)) continue;      // never add to weekends
+              if (KAYLA_LEAVE_WEEKDAYS.has(schedule[ti].date) && n === 'Kayla') continue; // skip leave days
               if (isRequestedOff(n, schedule[ti].date) || isTraining(n, schedule[ti].date)) continue; // protected — skip
               // Hard cap: don't insert if it would create 6+ consecutive days
               let bk = 0; for (let k = ti-1; k >= 0; k--) { if (!schedule[k].preseason && schedule[k].assignments[n] !== null) bk++; else break; }
@@ -1626,7 +1689,7 @@ function computeSchedule(preDays, mainDays) {
     for (let di = 0; di < schedule.length; di++) {
       const day = schedule[di];
       if (day.preseason) { streak = []; continue; }
-      if (day.assignments[n] !== null) {
+      if (day.assignments[n] !== null && day.assignments[n] !== 'LEAVE') {
         streak.push(di);
       } else {
         streak = [];
@@ -1704,11 +1767,14 @@ function scoreSchedule(sched) {
     if (day.preseason) return;
     const { assignments, onCall } = day;
     const weekend = isWknd(day.date);
-    const working = NAMES.filter(n => assignments[n] !== null);
-    if (working.length < 2) hard += 10;
-    if (weekend && working.length > 2) hard += 10;
+    const beeperWknd = weekend && day.date >= BEEPER_WKND_START;
+    const working = NAMES.filter(n => assignments[n] !== null && assignments[n] !== 'LEAVE');
+    if (working.length < (beeperWknd ? 1 : 2)) hard += 10;
+    if (weekend && !beeperWknd && working.length > 2) hard += 10;
     NAMES.forEach(n => {
-      const h = assignments[n]; const worked = h !== null;
+      const h = assignments[n];
+      if (h === 'LEAVE') { vs[n].consec=0; vs[n].consecOff=0; vs[n].wasOCLast=false; vs[n].consecOC=0; return; }
+      const worked = h !== null;
       const sh = typeof h === 'number' ? h : null;
       if (vs[n].wasOCLast && worked && sh !== null && sh < 10) hard += 5;
       if (worked && vs[n].consec >= 6) hard += 3;
@@ -1730,6 +1796,7 @@ function scoreSchedule(sched) {
   });
   NAMES.forEach(n => {
     if (n === 'Josh' || n === 'Jacqueline') return;
+    // Kayla: leave weekdays excluded, so active period is shorter; 13-14 still applies to counted days
     if (vs[n].totalOff < 13 || vs[n].totalOff > 14) hard += 5;
   });
   // Reward schedules where everyone gets at least a few 2-day rest windows.
@@ -1858,10 +1925,15 @@ function renderTable() {
     }
 
     visibleNames.forEach(n => {
-      const h       = day.assignments[n];         // null = OFF, number = start hour
+      const h       = day.assignments[n];         // null = OFF, number = start hour, 'LEAVE' = off-duty
+      // LEAVE day: static cell, no dropdown
+      if (h === 'LEAVE') {
+        html += `<td class="sLEAVE">LEAVE</td>`;
+        return;
+      }
       const reqOff  = isRequestedOff(n, day.date);
       const onTrain = isTraining(n, day.date);
-      const cls = h !== null ? (typeof h === 'number' ? SHIFT_CLASS[h] : h === 'FIELD' ? 'sFIELD' : h === 'TRAIN' ? 'sTRAIN' : 'sON') : (onTrain ? 'sTRAIN' : reqOff ? 'sREQ' : 'sOFF');
+      const cls = h !== null ? (typeof h === 'number' ? SHIFT_CLASS[h] : h === 'BEEPER' ? 'sBEEPER' : h === 'FIELD' ? 'sFIELD' : h === 'TRAIN' ? 'sTRAIN' : 'sON') : (onTrain ? 'sTRAIN' : reqOff ? 'sREQ' : 'sOFF');
       html += `<td class="${cls}">`;
       html += `<select class="shift-sel" onchange="cellChange(${di},'${n}',this.value)">`;
       const offLabel = onTrain && h === null ? 'OFF 🎓' : reqOff && h === null ? 'OFF 🔒' : 'OFF';
@@ -1869,13 +1941,14 @@ function renderTable() {
       VALID_STARTS.forEach(s => {
         html += `<option value="${s}"${h===s?' selected':''}>${SHIFT_LABEL[s]}</option>`;
       });
+      html += `<option value="BEEPER"${h==='BEEPER'?' selected':''}>📟 Beeper</option>`;
       html += `<option value="FIELD"${h==='FIELD'?' selected':''}>FIELD</option>`;
       html += `<option value="TRAIN"${h==='TRAIN'?' selected':''}>TRAIN</option>`;
       html += `</select></td>`;
     });
 
-    // On-Call dropdown (weekday-only staff excluded)
-    const working = NAMES.filter(n => day.assignments[n] !== null && !WEEKDAY_ONLY.has(n));
+    // On-Call dropdown (weekday-only staff and LEAVE excluded)
+    const working = NAMES.filter(n => day.assignments[n] !== null && day.assignments[n] !== 'LEAVE' && !WEEKDAY_ONLY.has(n));
     html += `<td class="col-oncall">`;
     html += `<select class="oncall-sel" onchange="ocChange(${di},this.value)">`;
     html += `<option value="">—</option>`;
@@ -1898,7 +1971,7 @@ function renderTable() {
 }
 
 function cellChange(di, name, val) {
-  schedule[di].assignments[name] = val === 'OFF' ? null : val === 'FIELD' ? 'FIELD' : val === 'TRAIN' ? 'TRAIN' : +val;
+  schedule[di].assignments[name] = val === 'OFF' ? null : val === 'BEEPER' ? 'BEEPER' : val === 'FIELD' ? 'FIELD' : val === 'TRAIN' ? 'TRAIN' : +val;
   const gaps = coverageGaps(schedule[di].assignments);
   schedule[di].coverageOK = gaps.length === 0;
   schedule[di].notes = gaps.length ? `Gap: ${gaps.map(h=>h<12?h+'AM':h===12?'12PM':(h-12)+'PM').join(', ')}` : '';
@@ -1950,10 +2023,12 @@ function renderStats() {
     const isSat = dow(day.date) === 'Sat';
     const isSun = dow(day.date) === 'Sun';
     NAMES.forEach(n => {
-      const worked = day.assignments[n] !== null;
+      const h = day.assignments[n];
+      if (h === 'LEAVE') return; // leave days don't count as worked or off
+      const worked = h !== null;
       if (worked) {
         s[n].total++;
-        s[n].starts[day.assignments[n]]++;
+        if (typeof h === 'number') s[n].starts[h]++; // guard: BEEPER has no numeric hour
         if (isSat) s[n].satWork++;
         if (isSun) s[n].sunWork++;
       } else {
@@ -2000,7 +2075,9 @@ function renderStats() {
   NAMES.forEach(n => {
     let streak = 0;
     mainDays.forEach(day => {
-      if (day.assignments[n] === null) {
+      const h = day.assignments[n];
+      if (h === 'LEAVE') { streak = 0; return; } // leave days break the streak, don't count as rest
+      if (h === null) {
         streak++;
         if (streak === 2) twoConsecOffCount[n]++; // count each time a 2-day rest is completed
       } else {
@@ -2035,11 +2112,12 @@ function validateSchedule() {
     if (day.preseason) return;
     const { date, assignments, onCall } = day;
     const weekend = isWknd(date);
-    const working = NAMES.filter(n => assignments[n] !== null);
+    const beeperWknd = weekend && date >= BEEPER_WKND_START;
+    const working = NAMES.filter(n => assignments[n] !== null && assignments[n] !== 'LEAVE');
 
-    // R1: min 2 per day
-    if (working.length < 2)
-      add('R1', `${fmtDate(date)}: only ${working.length} person scheduled (min 2)`);
+    // R1: min 2/day (beeper weekends only require 1)
+    if (working.length < (beeperWknd ? 1 : 2))
+      add('R1', `${fmtDate(date)}: only ${working.length} person scheduled (min ${beeperWknd ? 1 : 2})`);
 
     // R4: max 2 on weekends
     if (weekend && working.length > 2)
@@ -2069,8 +2147,8 @@ function validateSchedule() {
       else if (worked && vs[n].consec >= 5)
         add('R8', `${fmtDate(date)}: ${n} working day ${vs[n].consec + 1} in a row (soft limit: 5)`);
 
-      // R7: max 2 consecutive days off
-      if (!worked && vs[n].consecOff >= 2)
+      // R7: max 2 consecutive days off (skip Kayla during her leave period — expected off)
+      if (!worked && vs[n].consecOff >= 2 && !(n === 'Kayla' && date >= '2026-07-29'))
         add('R7', `${fmtDate(date)}: ${n} off ${vs[n].consecOff + 1} days in a row (max 2)`);
     });
 
@@ -2093,7 +2171,13 @@ function validateSchedule() {
 
     // Update state
     NAMES.forEach(n => {
-      const worked = assignments[n] !== null;
+      const h = assignments[n];
+      if (h === 'LEAVE') {
+        // Leave day: reset streaks, don't count as worked or off
+        vs[n].consec=0; vs[n].consecOff=0; vs[n].wasOCLast=false; vs[n].consecOC=0;
+        return;
+      }
+      const worked = h !== null;
       vs[n].consec    = worked ? vs[n].consec + 1 : 0;
       vs[n].consecOff = worked ? 0 : vs[n].consecOff + 1;
       vs[n].totalOff  = worked ? vs[n].totalOff : vs[n].totalOff + 1;
@@ -2105,7 +2189,7 @@ function validateSchedule() {
     });
   });
 
-  // R5: exactly 13–14 days off per person (main season)
+  // R5: exactly 13–14 days off per person (main season; LEAVE days excluded from Kayla's count)
   NAMES.forEach(n => {
     const off = vs[n].totalOff;
     if (off < 13)
