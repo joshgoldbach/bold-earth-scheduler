@@ -1140,7 +1140,10 @@ function computeSchedule(preDays, mainDays) {
     // No urgency-based mustWork on weekdays — urgency sort in fillPool handles that naturally
     //   and avoids the alternating 1-on/1-off trap when everyone's urgency > threshold.
     const mustWork = canWork.filter(n =>
-      (weekend ? st[n].wkdayConsecOff >= 2 : st[n].consecOff >= 2) || st[n].wasOCLast
+      // wasOCLast is always mustWork (R3 hard constraint)
+      st[n].wasOCLast ||
+      // consecOff >= 2 forces back only if person hasn't yet hit their work target
+      ((weekend ? st[n].wkdayConsecOff >= 2 : st[n].consecOff >= 2) && st[n].total < workTarget[n])
     );
 
     // Valid start times per person
@@ -1180,6 +1183,13 @@ function computeSchedule(preDays, mainDays) {
       const wkndSortFn = (a, b) => {
         const am = mustWorkSet.has(a) ? 0 : 1, bm = mustWorkSet.has(b) ? 0 : 1;
         if (am !== bm) return am - bm;
+        // On Sunday: prefer people who had Saturday off (maximize full weekends off).
+        // st[n].consec > 0 means they worked yesterday (Saturday).
+        if (dow(date) === 'Sun') {
+          const aWrkdSat = st[a].consec > 0 ? 1 : 0;
+          const bWrkdSat = st[b].consec > 0 ? 1 : 0;
+          if (aWrkdSat !== bWrkdSat) return aWrkdSat - bWrkdSat; // prefer Sat-off person
+        }
         const diff = wkndUrg(b) - wkndUrg(a);
         if (Math.abs(diff) > 0.001) return diff;
         return urgency[b] - urgency[a];
@@ -1538,6 +1548,9 @@ function computeSchedule(preDays, mainDays) {
   NAMES.forEach(n => {
     const p = TEAM.find(t => t.name === n);
     for (let pass = 0; pass < 4; pass++) {
+      // If person is already at or over their work target, long rests are intentional — skip R7.
+      const currentTotal = schedule.filter(d => !d.preseason && d.assignments[n] !== null).length;
+      if (currentTotal >= workTarget[n]) break;
       let consecOff = 0, fixed = false;
       for (let di = 0; di < schedule.length; di++) {
         if (schedule[di].preseason) { consecOff = 0; continue; } // ignore pre-season days
