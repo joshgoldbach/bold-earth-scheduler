@@ -214,9 +214,11 @@
   .btn-lock-active { background:var(--red) !important; color:white !important; }
 
   /* Pin */
-  .pin-btn { background:none; border:none; cursor:pointer; font-size:0.7rem; padding:0 3px 0 0; opacity:0.2; line-height:1; vertical-align:middle; }
+  .pin-btn { background:none; border:none; cursor:pointer; font-size:0.7rem; padding:0 2px 0 0; opacity:0.2; line-height:1; vertical-align:middle; }
   .pin-btn:hover { opacity:0.8; }
   .pin-btn.pin-active { opacity:1; }
+  .unpin-btn { background:none; border:none; cursor:pointer; font-size:0.65rem; color:#dc2626; opacity:0.6; padding:0 3px 0 0; line-height:1; vertical-align:middle; font-weight:700; }
+  .unpin-btn:hover { opacity:1; }
   tr.row-pinned td.col-date { border-left:3px solid var(--gold); }
 
   /* Time-off */
@@ -635,20 +637,27 @@ function savePinnedDays() {
 function togglePin(di) {
   const day = schedule[di];
   if (!day || day.preseason) return;
-  if (pinnedDays[day.date]) {
-    delete pinnedDays[day.date];
-  } else {
-    pinnedDays[day.date] = {
-      assignments: { ...day.assignments },
-      onCall:      day.onCall,
-      coverageOK:  day.coverageOK,
-      notes:       day.notes,
-    };
-  }
+  const wasAlreadyPinned = !!pinnedDays[day.date];
+  // Always save current state (pin or update existing pin)
+  pinnedDays[day.date] = {
+    assignments: { ...day.assignments },
+    onCall:      day.onCall,
+    coverageOK:  day.coverageOK,
+    notes:       day.notes,
+  };
   savePinnedDays();
   renderTable();
   const count = Object.keys(pinnedDays).length;
-  toast(count ? `${count} day(s) pinned — will survive next regeneration.` : 'Day unpinned.');
+  toast(wasAlreadyPinned ? `Pin updated for ${fmtDate(day.date)}.` : `${count} day(s) pinned — will survive next regeneration.`);
+}
+
+function unpinDay(di) {
+  const day = schedule[di];
+  if (!day || day.preseason) return;
+  delete pinnedDays[day.date];
+  savePinnedDays();
+  renderTable();
+  toast('Day unpinned.');
 }
 
 function saveTimeOffToStorage() {
@@ -1726,7 +1735,8 @@ function renderTable() {
     if (isPinned)         classes.push('row-pinned');
     html += `<tr${classes.length ? ` class="${classes.join(' ')}"` : ''}>`;
     if (!day.preseason) {
-      html += `<td class="col-date"><button class="pin-btn${isPinned ? ' pin-active' : ''}" onclick="togglePin(${di})" title="${isPinned ? 'Unpin (allow regeneration to overwrite)' : 'Pin this day (survives regeneration)'}">📌</button>${fmtDate(day.date)}</td>`;
+      const unpinBtn = isPinned ? `<button class="unpin-btn" onclick="unpinDay(${di})" title="Unpin this day">✕</button>` : '';
+      html += `<td class="col-date"><button class="pin-btn${isPinned ? ' pin-active' : ''}" onclick="togglePin(${di})" title="${isPinned ? 'Update pin with current edits' : 'Pin this day (survives regeneration)'}">📌</button>${unpinBtn}${fmtDate(day.date)}</td>`;
     } else {
       html += `<td class="col-date">${fmtDate(day.date)}</td>`;
     }
