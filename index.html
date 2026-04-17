@@ -953,6 +953,18 @@ async function loadMaster() {
     const data = snap.data();
     days     = data.days;
     schedule = data.schedule;
+    // Clear any LEAVE assignments for dates no longer in KAYLA_LEAVE_WEEKDAYS
+    // (handles stale Firestore data after the leave window is shortened)
+    let staleLeaveCleaned = false;
+    schedule.forEach(day => {
+      NAMES.forEach(n => {
+        if (day.assignments[n] === 'LEAVE' && !KAYLA_LEAVE_WEEKDAYS.has(day.date)) {
+          day.assignments[n] = null;
+          if (day.onCall === n) day.onCall = null;
+          staleLeaveCleaned = true;
+        }
+      });
+    });
     // Apply any locally-saved time-off requests that post-date the last publish
     applyTimeOffToSchedule();
     document.getElementById('start-date').value = data.startDate;
@@ -969,7 +981,7 @@ async function loadMaster() {
     document.getElementById('card-view-btn').disabled  = false;
     document.getElementById('validation-out').innerHTML = '';
     masterLoaded = true;
-    hasUnsavedChanges = false;
+    hasUnsavedChanges = staleLeaveCleaned;
     lastMasterData = data;
     scheduleLocked = !!data.locked;
     updateMasterStatus(data);
@@ -978,7 +990,10 @@ async function loadMaster() {
     applyLockState();
     renderAuditLog(data.auditLog);
     startMasterListener();
-    toast('Master schedule loaded — live for the whole team.');
+    const loadMsg = staleLeaveCleaned
+      ? 'Master schedule loaded — stale leave days cleared. Republish to save.'
+      : 'Master schedule loaded — live for the whole team.';
+    toast(loadMsg);
   } catch(e) {
     console.error('loadMaster failed:', e);
   }
