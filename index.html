@@ -142,10 +142,14 @@
   td.sFIELD { background: #e0f2fe !important; }  /* field = sky blue */
   td.sLEAVE { background: #f3f4f6 !important; color: #9ca3af; font-size:0.72rem; text-align:center; }
   td.sBEEPER { background: #ede9fe !important; }
+  td.sTRAVEL   { background: #fff7ed !important; }  /* travel = warm orange tint */
+  td.sCHECKOUT { background: #f0fdf4 !important; }  /* checkout = light green */
   /* Override preseason row !important so colored cells still show their colors */
   #schedule-table tr.preseason td.sON    { background: #dcfce7 !important; color: #166534; }
   #schedule-table tr.preseason td.sTRAIN { background: #fef9c3 !important; color: #92400e; }
   #schedule-table tr.preseason td.sFIELD { background: #e0f2fe !important; color: #0369a1; }
+  #schedule-table tr.preseason td.sTRAVEL   { background: #fff7ed !important; color: #9a3412; }
+  #schedule-table tr.preseason td.sCHECKOUT { background: #f0fdf4 !important; color: #166534; }
 
   /* Shift cell colors — !important so they win over row-level weekend/preseason backgrounds */
   td.s8   { background: #fde8d0 !important; }
@@ -686,6 +690,25 @@ function isRequestedOff(name, date) {
   return timeOffRequests.some(r => r.name === name && date >= r.start && date <= r.end);
 }
 
+// Apply current time-off (and training) requests to the in-memory schedule.
+// Clears any assignments that conflict with a time-off request, matching the
+// enforcement step inside computeSchedule. Returns true if anything changed.
+function applyTimeOffToSchedule() {
+  if (!schedule || !schedule.length) return false;
+  let changed = false;
+  schedule.forEach(day => {
+    NAMES.forEach(n => {
+      if ((isRequestedOff(n, day.date) || isTraining(n, day.date)) &&
+          day.assignments[n] !== null && day.assignments[n] !== 'LEAVE') {
+        day.assignments[n] = null;
+        if (day.onCall === n) day.onCall = null;
+        changed = true;
+      }
+    });
+  });
+  return changed;
+}
+
 function addTimeOff() {
   const name  = document.getElementById('to-person').value;
   const start = document.getElementById('to-start').value;
@@ -697,7 +720,19 @@ function addTimeOff() {
   saveTimeOffToStorage();
   renderTimeOffList();
   document.getElementById('to-end').value = '';
-  toast(`Time-off added for ${name}. Regenerate the schedule to apply.`);
+  if (schedule && schedule.length) {
+    const changed = applyTimeOffToSchedule();
+    if (changed) {
+      renderTable();
+      renderStats();
+      if (masterLoaded) { hasUnsavedChanges = true; updateMasterStatus(lastMasterData); updateSaveChangesBtn(); }
+      toast(`Time-off added for ${name}. Schedule updated — republish master to save.`);
+    } else {
+      toast(`Time-off added for ${name}.`);
+    }
+  } else {
+    toast(`Time-off added for ${name}. Generate a schedule to apply.`);
+  }
 }
 
 function removeTimeOff(i) {
@@ -919,6 +954,8 @@ async function loadMaster() {
     const data = snap.data();
     days     = data.days;
     schedule = data.schedule;
+    // Apply any locally-saved time-off requests that post-date the last publish
+    applyTimeOffToSchedule();
     document.getElementById('start-date').value = data.startDate;
     document.getElementById('end-date').value   = data.endDate;
     ['controls-card','schedule-card','stats-card','weekend-card']
@@ -1877,11 +1914,13 @@ function renderTable() {
       const weekend = isWknd(day.date);
       // All pre-season options (same set for weekdays and weekends)
       const preOpts = [
-        ['OFF',    'OFF'],
-        ['ON',     'ON'],
-        ['BEEPER', '📟 Beeper'],
-        ['TRAIN',  'TRAIN'],
-        ['FIELD',  'FIELD'],
+        ['OFF',      'OFF'],
+        ['ON',       'ON'],
+        ['BEEPER',   '📟 Beeper'],
+        ['TRAIN',    'TRAIN'],
+        ['FIELD',    'FIELD'],
+        ['TRAVEL',   'TRAVEL'],
+        ['CHECKOUT', 'CHECKOUT'],
       ];
 
       visibleNames.forEach(n => {
@@ -1902,7 +1941,7 @@ function renderTable() {
 
         // Map null → 'OFF' for dropdown selection
         const selected = h === null ? 'OFF' : h;
-        const cls = h === 'BEEPER' ? 'col-oncall' : h === 'ON' ? 'sON' : h === 'FIELD' ? 'sFIELD' : 'sOFF';
+        const cls = h === 'BEEPER' ? 'col-oncall' : h === 'ON' ? 'sON' : h === 'FIELD' ? 'sFIELD' : h === 'TRAVEL' ? 'sTRAVEL' : h === 'CHECKOUT' ? 'sCHECKOUT' : 'sOFF';
         html += `<td class="${cls}">`;
         html += `<select class="shift-sel" onchange="preCellChange(${di},'${n}',this.value)" style="width:80px">`;
         preOpts.forEach(([val, label]) => {
@@ -1939,7 +1978,7 @@ function renderTable() {
       }
       const reqOff  = isRequestedOff(n, day.date);
       const onTrain = isTraining(n, day.date);
-      const cls = h !== null ? (typeof h === 'number' ? SHIFT_CLASS[h] : h === 'BEEPER' ? 'sBEEPER' : h === 'FIELD' ? 'sFIELD' : h === 'TRAIN' ? 'sTRAIN' : 'sON') : (onTrain ? 'sTRAIN' : reqOff ? 'sREQ' : 'sOFF');
+      const cls = h !== null ? (typeof h === 'number' ? SHIFT_CLASS[h] : h === 'BEEPER' ? 'sBEEPER' : h === 'FIELD' ? 'sFIELD' : h === 'TRAIN' ? 'sTRAIN' : h === 'TRAVEL' ? 'sTRAVEL' : h === 'CHECKOUT' ? 'sCHECKOUT' : 'sON') : (onTrain ? 'sTRAIN' : reqOff ? 'sREQ' : 'sOFF');
       html += `<td class="${cls}">`;
       html += `<select class="shift-sel" onchange="cellChange(${di},'${n}',this.value)">`;
       const offLabel = onTrain && h === null ? 'OFF 🎓' : reqOff && h === null ? 'OFF 🔒' : 'OFF';
@@ -1950,6 +1989,8 @@ function renderTable() {
       html += `<option value="BEEPER"${h==='BEEPER'?' selected':''}>📟 Beeper</option>`;
       html += `<option value="FIELD"${h==='FIELD'?' selected':''}>FIELD</option>`;
       html += `<option value="TRAIN"${h==='TRAIN'?' selected':''}>TRAIN</option>`;
+      html += `<option value="TRAVEL"${h==='TRAVEL'?' selected':''}>TRAVEL</option>`;
+      html += `<option value="CHECKOUT"${h==='CHECKOUT'?' selected':''}>CHECKOUT</option>`;
       html += `</select></td>`;
     });
 
@@ -1977,7 +2018,7 @@ function renderTable() {
 }
 
 function cellChange(di, name, val) {
-  schedule[di].assignments[name] = val === 'OFF' ? null : val === 'BEEPER' ? 'BEEPER' : val === 'FIELD' ? 'FIELD' : val === 'TRAIN' ? 'TRAIN' : +val;
+  schedule[di].assignments[name] = val === 'OFF' ? null : val === 'BEEPER' ? 'BEEPER' : val === 'FIELD' ? 'FIELD' : val === 'TRAIN' ? 'TRAIN' : val === 'TRAVEL' ? 'TRAVEL' : val === 'CHECKOUT' ? 'CHECKOUT' : +val;
   const gaps = coverageGaps(schedule[di].assignments);
   schedule[di].coverageOK = gaps.length === 0;
   schedule[di].notes = gaps.length ? `Gap: ${gaps.map(h=>h<12?h+'AM':h===12?'12PM':(h-12)+'PM').join(', ')}` : '';
@@ -2300,6 +2341,20 @@ function exportCalendar(name) {
   schedule.forEach(day => {
     const h = day.assignments[name];
     if (h === null || h === 'TRAIN') return; // off or training — skip
+    if (h === 'FIELD' || h === 'TRAVEL' || h === 'CHECKOUT') {
+      // All-day event with no timed shift
+      const labelMap = { FIELD: 'FIELD Day', TRAVEL: 'Travel Day', CHECKOUT: 'Checkout Day' };
+      events.push([
+        'BEGIN:VEVENT',
+        `DTSTART;VALUE=DATE:${toICSDate(day.date)}`,
+        `DTEND;VALUE=DATE:${toICSDate(day.date)}`,
+        `SUMMARY:DS ${labelMap[h]}`,
+        `DESCRIPTION:Bold Earth / ARCC Director Support – ${labelMap[h].toLowerCase()}.`,
+        `UID:boldearth-${name}-${day.date}-${h.toLowerCase()}@scheduler`,
+        'END:VEVENT',
+      ].join('\r\n'));
+      return;
+    }
 
     if (h === 'ON') {
       // Pre-season weekday — all-day event
@@ -2372,6 +2427,8 @@ function fmtAssignment(h) {
   if (h === 'ON') return 'ON';
   if (h === 'BEEPER') return 'BEEPER';
   if (h === 'FIELD') return 'FIELD';
+  if (h === 'TRAVEL') return 'TRAVEL';
+  if (h === 'CHECKOUT') return 'CHECKOUT';
   return SHIFT_LABEL[h];
 }
 
@@ -2585,7 +2642,7 @@ function renderCardView() {
 
     // Pre-season
     if (day.preseason) {
-      const label = h === 'BEEPER' ? '📟 BEEPER' : h === 'ON' ? 'ON' : h === 'TRAIN' ? 'TRAIN' : h === 'FIELD' ? 'FIELD' : 'OFF';
+      const label = h === 'BEEPER' ? '📟 BEEPER' : h === 'ON' ? 'ON' : h === 'TRAIN' ? 'TRAIN' : h === 'FIELD' ? 'FIELD' : h === 'TRAVEL' ? 'TRAVEL' : h === 'CHECKOUT' ? 'CHECKOUT' : 'OFF';
       const cardClass = h === 'TRAIN' ? 'train' : h === null ? 'off' : '';
       return `<div class="day-card${isWeekend?' wknd':''} ${cardClass}">
         <div class="dc-dow">${dayName}</div>
