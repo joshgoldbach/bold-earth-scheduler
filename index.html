@@ -619,7 +619,6 @@ const maxOffFor     = n => MAX_OFF_PER[n] ?? 14;
 // Kayla is off-duty (field/travel) on these weekdays — they don't count as days off for R5.
 // Weekend days during the same period (8/1, 8/2, 8/8, 8/9) count normally as days off.
 const KAYLA_LEAVE_WEEKDAYS = new Set([
-  '2026-07-29', '2026-07-30', '2026-07-31',
   '2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06', '2026-08-07',
   '2026-08-10'
 ]);
@@ -1970,7 +1969,9 @@ function renderTable() {
     }
 
     visibleNames.forEach(n => {
-      const h       = day.assignments[n];         // null = OFF, number = start hour, 'LEAVE' = off-duty
+      // If stored as LEAVE but no longer in the leave set, treat as null (OFF) so cell becomes editable
+      const rawH = day.assignments[n];
+      const h = (rawH === 'LEAVE' && !KAYLA_LEAVE_WEEKDAYS.has(day.date)) ? null : rawH;
       // LEAVE day: static cell, no dropdown
       if (h === 'LEAVE') {
         html += `<td class="sLEAVE">LEAVE</td>`;
