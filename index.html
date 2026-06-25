@@ -987,6 +987,7 @@ async function loadMaster() {
     applyLockState();
     renderAuditLog(data.auditLog);
     startMasterListener();
+    scrollToToday();
     const loadMsg = staleLeaveCleaned
       ? 'Master schedule loaded — stale leave days cleared. Republish to save.'
       : 'Master schedule loaded — live for the whole team.';
@@ -1899,6 +1900,17 @@ function setViewFilter(val) {
 // ============================================================
 // RENDER TABLE
 // ============================================================
+function scrollToToday() {
+  const today = new Date().toISOString().slice(0, 10);
+  const row = document.querySelector(`#schedule-table tr[data-date="${today}"]`);
+  if (!row) return;
+  const container = document.querySelector('.table-scroll');
+  if (!container) return;
+  // Center today's row in the visible scroll area
+  const offset = row.offsetTop - container.clientHeight / 2 + row.clientHeight / 2;
+  container.scrollTop = Math.max(0, offset);
+}
+
 function renderTable() {
   const tbl = document.getElementById('schedule-table');
   const visibleNames = scheduleFilter ? NAMES.filter(n => n === scheduleFilter) : NAMES;
@@ -1917,7 +1929,7 @@ function renderTable() {
     if (isWknd(day.date)) classes.push('weekend');
     if (day.preseason)    classes.push('preseason');
     if (isPinned)         classes.push('row-pinned');
-    html += `<tr${classes.length ? ` class="${classes.join(' ')}"` : ''}>`;
+    html += `<tr data-date="${day.date}"${classes.length ? ` class="${classes.join(' ')}"` : ''}>`;
     if (!day.preseason) {
       const unpinBtn = isPinned ? `<button class="unpin-btn" onclick="unpinDay(${di})" title="Unpin this day">✕</button>` : '';
       html += `<td class="col-date"><button class="pin-btn${isPinned ? ' pin-active' : ''}" onclick="togglePin(${di})" title="${isPinned ? 'Update pin with current edits' : 'Pin this day (survives regeneration)'}">📌</button>${unpinBtn}${fmtDate(day.date)}</td>`;
