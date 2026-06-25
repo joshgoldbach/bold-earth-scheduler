@@ -300,10 +300,9 @@
   @media (max-width: 700px) {
     main { padding: 10px; gap: 10px; }
     .day-cards-grid { grid-template-columns: repeat(2, 1fr); }
-    #schedule-card, #stats-card, #weekend-card, #rules-card { display: none !important; }
-    #card-view-card { display: block !important; }
     .controls-row { gap: 6px; }
     .legend { display: none; }
+    .table-scroll { max-height: none; overflow-x: auto; overflow-y: visible; }
   }
 </style>
 </head>
@@ -612,7 +611,7 @@ const WKND_LOW = new Set(['Ali', 'Josh']);
 const WKND_HARD_CAP = { 'Josh': 5, 'Izzy': 6, 'Ali': 3, 'Kayla': 6, 'Holly': 6, 'Bryan': 6, 'Emily': 3, 'Jacqueline': 0 };
 // Hard cap: max on-call nights per person.
 // Izzy and Kayla capped at 8 so overflow flows to Holly, guaranteeing Holly >= Izzy and Holly >= Bryan.
-const OC_HARD_CAP   = { 'Josh': 4, 'Izzy': 8, 'Ali': 4, 'Kayla': 8, 'Holly': 12, 'Bryan': 9, 'Emily': 4, 'Jacqueline': 0 };
+const OC_HARD_CAP   = { 'Josh': 5, 'Izzy': 8, 'Ali': 4, 'Kayla': 8, 'Holly': 11, 'Bryan': 9, 'Emily': 4, 'Jacqueline': 0 };
 // R5 carve-out: Josh has a reduced days-off cap (10); Jacqueline weekday-only so 14 off (weekends); others default to 15.
 const MAX_OFF_PER   = { 'Josh': 10, 'Jacqueline': 14 };
 const maxOffFor     = n => MAX_OFF_PER[n] ?? 14;
@@ -965,8 +964,6 @@ async function loadMaster() {
         }
       });
     });
-    // Apply any locally-saved time-off requests that post-date the last publish
-    applyTimeOffToSchedule();
     document.getElementById('start-date').value = data.startDate;
     document.getElementById('end-date').value   = data.endDate;
     ['controls-card','schedule-card','stats-card','weekend-card']
@@ -1005,6 +1002,7 @@ async function publishMaster(requireConfirm) {
     const by = lastMasterData.savedBy ? ` (last saved by ${lastMasterData.savedBy})` : '';
     if (!confirm(`This will replace the current master schedule${by}.\n\nAre you sure?`)) return;
   }
+  const prevMasterData = lastMasterData;
   try {
     const entry = { savedAt: new Date().toISOString(), savedBy: getCurrentUser() || 'Unknown', action: requireConfirm ? 'Published new schedule' : 'Saved changes' };
     const existingLog = lastMasterData?.auditLog || [];
@@ -1022,16 +1020,21 @@ async function publishMaster(requireConfirm) {
       previousVersion,
       locked:    scheduleLocked, // preserve current lock state across saves
     };
+    // Set lastMasterData before the await so the Firestore onSnapshot listener
+    // (which fires from the local cache write before server confirmation) sees the
+    // new savedAt and does not show a false "just updated" banner that could trigger
+    // a reload before the server has confirmed the write.
+    lastMasterData = data;
     await db.collection('schedules').doc('master').set(data);
     masterLoaded = true;
     hasUnsavedChanges = false;
-    lastMasterData = data;
     updateMasterStatus(data);
     updateSaveChangesBtn();
     updateUndoBtn();
     renderAuditLog(auditLog);
     toast(requireConfirm ? 'Published as master — your whole team can now see it.' : 'Changes saved to master.');
   } catch(e) {
+    lastMasterData = prevMasterData; // Restore on failure so status stays accurate
     toast('Save failed: ' + e.message, true);
   }
 }
@@ -1941,12 +1944,6 @@ function renderTable() {
         const h = day.assignments[n];
         const reqOff  = isRequestedOff(n, day.date);
 
-        // TRAIN: static amber highlight (no dropdown)
-        if (h === 'TRAIN') {
-          html += `<td class="sTRAIN" style="font-weight:700;font-size:0.75rem;color:#92400e">TRAIN</td>`;
-          return;
-        }
-
         // Locked time-off is static
         if (reqOff && h === null) {
           html += `<td class="sREQ"><span style="color:#bbb;font-size:0.75rem">🔒</span></td>`;
@@ -1955,7 +1952,7 @@ function renderTable() {
 
         // Map null → 'OFF' for dropdown selection
         const selected = h === null ? 'OFF' : h;
-        const cls = h === 'BEEPER' ? 'col-oncall' : h === 'ON' ? 'sON' : h === 'FIELD' ? 'sFIELD' : h === 'TRAVEL' ? 'sTRAVEL' : h === 'CHECKOUT' ? 'sCHECKOUT' : 'sOFF';
+        const cls = h === 'BEEPER' ? 'col-oncall' : h === 'ON' ? 'sON' : h === 'TRAIN' ? 'sTRAIN' : h === 'FIELD' ? 'sFIELD' : h === 'TRAVEL' ? 'sTRAVEL' : h === 'CHECKOUT' ? 'sCHECKOUT' : 'sOFF';
         html += `<td class="${cls}">`;
         html += `<select class="shift-sel" onchange="preCellChange(${di},'${n}',this.value)" style="width:80px">`;
         preOpts.forEach(([val, label]) => {
@@ -2082,20 +2079,35 @@ function renderStats() {
   const s = {};
   NAMES.forEach(n => { s[n] = { total:0, off:0, oc:0, starts:{8:0,9:0,10:0,12:0}, satWork:0, sunWork:0, satOff:0, sunOff:0 }; });
 
+  const WKND_OC_START = '2026-06-21';
+
+  // Total shifts, days off, start times: main season only (6/25+)
   schedule.filter(d => !d.preseason).forEach(day => {
+    NAMES.forEach(n => {
+      const h = day.assignments[n];
+      if (h === 'LEAVE') return;
+      const worked = h !== null;
+      if (worked) {
+        s[n].total++;
+        if (typeof h === 'number') s[n].starts[h]++;
+      } else {
+        s[n].off++;
+      }
+    });
+  });
+
+  // Weekend days worked and on-call: from 6/21 to include pre-season weekends
+  schedule.filter(d => d.date >= WKND_OC_START).forEach(day => {
     const isSat = dow(day.date) === 'Sat';
     const isSun = dow(day.date) === 'Sun';
     NAMES.forEach(n => {
       const h = day.assignments[n];
-      if (h === 'LEAVE') return; // leave days don't count as worked or off
+      if (h === 'LEAVE') return;
       const worked = h !== null;
       if (worked) {
-        s[n].total++;
-        if (typeof h === 'number') s[n].starts[h]++; // guard: BEEPER has no numeric hour
         if (isSat) s[n].satWork++;
         if (isSun) s[n].sunWork++;
       } else {
-        s[n].off++;
         if (isSat) s[n].satOff++;
         if (isSun) s[n].sunOff++;
       }
@@ -2103,9 +2115,9 @@ function renderStats() {
     });
   });
 
-  // Count total Saturdays and Sundays in the main season only
-  const totalSats = schedule.filter(d => !d.preseason && dow(d.date) === 'Sat').length;
-  const totalSuns = schedule.filter(d => !d.preseason && dow(d.date) === 'Sun').length;
+  // Count total Saturdays and Sundays from 6/21
+  const totalSats = schedule.filter(d => d.date >= WKND_OC_START && dow(d.date) === 'Sat').length;
+  const totalSuns = schedule.filter(d => d.date >= WKND_OC_START && dow(d.date) === 'Sun').length;
 
   let html = '<thead><tr><th>Person</th><th>Tz</th><th>Shifts</th><th>Days Off</th><th>On-Call</th>';
   VALID_STARTS.forEach(h => html += `<th>${SHIFT_LABEL[h]}</th>`);
