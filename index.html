@@ -1905,10 +1905,14 @@ function scrollToToday() {
   const row = document.querySelector(`#schedule-table tr[data-date="${today}"]`);
   if (!row) return;
   const container = document.querySelector('.table-scroll');
-  if (!container) return;
-  // Center today's row in the visible scroll area
-  const offset = row.offsetTop - container.clientHeight / 2 + row.clientHeight / 2;
-  container.scrollTop = Math.max(0, offset);
+  if (container && container.scrollHeight > container.clientHeight) {
+    // Desktop: fixed-height container scrolls internally
+    const offset = row.offsetTop - container.clientHeight / 2 + row.clientHeight / 2;
+    container.scrollTop = Math.max(0, offset);
+  } else {
+    // Mobile: page itself scrolls
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
 
 function renderTable() {
