@@ -157,6 +157,7 @@
   td.s10  { background: #dbeafe !important; }
   td.s11  { background: #cffafe !important; }
   td.s12  { background: #fce7f3 !important; }
+  td.s13  { background: #fef9c3 !important; }
   td.sOFF { background: #f8fafc; }
 
   /* Shift dropdown */
@@ -245,7 +246,7 @@
     .card h2 { margin-bottom: 8px; }
     #schedule-table td, #schedule-table th { padding: 2px 4px; font-size: 10px; }
     .shift-sel, .oncall-sel { appearance: none; border: none; background: transparent; font-size: 10px; font-weight: 600; pointer-events: none; width: auto; }
-    td.s8, td.s9, td.s10, td.s11, td.s12, td.sOFF, td.sREQ, td.col-oncall, td.cov-ok, td.cov-bad { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    td.s8, td.s9, td.s10, td.s11, td.s12, td.s13, td.sOFF, td.sREQ, td.col-oncall, td.cov-ok, td.cov-bad { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .btn, select.oncall-sel option { display: none; }
     .oncall-sel { pointer-events: none; }
     #stats-table td, #stats-table th { padding: 3px 8px; font-size: 11px; }
@@ -294,7 +295,7 @@
   .day-card .dc-date { font-size:0.75rem; color:#64748b; margin:2px 0 8px; }
   .day-card .dc-shift { font-family:'Barlow Condensed',sans-serif; font-size:1.15rem; font-weight:800; margin:4px 0; letter-spacing:.02em; }
   .day-card .dc-oc   { font-size:0.68rem; font-weight:700; color:#92400e; background:#fef3c7; border:1px solid #fbbf24; border-radius:999px; padding:2px 8px; display:inline-block; margin-top:5px; }
-  .dc-s8  { color:#c2410c; } .dc-s9 { color:#166534; } .dc-s10 { color:var(--blue); } .dc-s11 { color:#0e7490; } .dc-s12 { color:#9d174d; }
+  .dc-s8  { color:#c2410c; } .dc-s9 { color:#166534; } .dc-s10 { color:var(--blue); } .dc-s11 { color:#0e7490; } .dc-s12 { color:#9d174d; } .dc-s13 { color:#92400e; }
   .day-card .dc-off-label { font-size:0.78rem; color:#cbd5e1; font-weight:700; }
   .card-view-person { display:flex; align-items:center; gap:10px; margin-bottom:14px; font-size:0.85rem; }
 
@@ -484,6 +485,7 @@
         <div class="legend-item"><div class="legend-swatch" style="background:#d0e4f7"></div>10 AM</div>
         <div class="legend-item"><div class="legend-swatch" style="background:#cffafe"></div>11 AM</div>
         <div class="legend-item"><div class="legend-swatch" style="background:#ead1dc"></div>12 PM</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#fef9c3"></div>1 PM</div>
         <div class="legend-item"><div class="legend-swatch" style="background:#f3f3f3"></div>OFF</div>
         <div class="legend-item"><div class="legend-swatch" style="background:#fef3c7;border:1px solid #fcd34d"></div>Training</div>
         <div class="legend-item"><div class="legend-swatch" style="background:#e0f2fe;border:1px solid #7dd3fc"></div>Field</div>
@@ -577,11 +579,11 @@ const NAMES        = TEAM.map(p => p.name);
 const ET_STAFF     = TEAM.filter(p => p.tz === 'ET').map(p => p.name);
 // Staff who only work Mon–Fri at a fixed start time and are never on-call
 const WEEKDAY_ONLY = new Set(TEAM.filter(p => p.weekdayOnly).map(p => p.name));
-const VALID_STARTS = [8, 9, 10, 11, 12];
+const VALID_STARTS = [8, 9, 10, 11, 12, 13];
 const SHIFT_LEN    = 9;
 
-const SHIFT_LABEL = { 8: '8 AM', 9: '9 AM', 10: '10 AM', 11: '11 AM', 12: '12 PM' };
-const SHIFT_CLASS = { 8: 's8',   9: 's9',   10: 's10',   11: 's11',   12: 's12'   };
+const SHIFT_LABEL = { 8: '8 AM', 9: '9 AM', 10: '10 AM', 11: '11 AM', 12: '12 PM', 13: '1 PM' };
+const SHIFT_CLASS = { 8: 's8',   9: 's9',   10: 's10',   11: 's11',   12: 's12',   13: 's13'  };
 const PRESEASON_END = '2026-06-24'; // May 19 – Jun 24: pre-season (weekend on-call only, no shift hours)
 
 // ============================================================
