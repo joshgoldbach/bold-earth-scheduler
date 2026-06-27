@@ -363,56 +363,6 @@
     </div>
   </div>
 
-  <!-- TRAINING BLOCKS -->
-  <div class="card" id="training-card">
-    <h2>Training Blocks <span style="font-size:0.72rem;font-weight:400;color:#888;text-transform:none;letter-spacing:0">— person is unavailable; shows as TRAIN on schedule</span></h2>
-    <div class="settings-row">
-      <div class="field">
-        <label>Person</label>
-        <select id="tr-person">
-          <option value="">Select person…</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>From</label>
-        <input type="date" id="tr-start">
-      </div>
-      <div class="field">
-        <label>To</label>
-        <input type="date" id="tr-end">
-      </div>
-      <button class="btn btn-secondary" onclick="addTraining()">+ Add Training Block</button>
-    </div>
-    <div id="training-list" style="margin-top:12px">
-      <p style="color:#888;font-size:0.8rem">No training blocks added.</p>
-    </div>
-  </div>
-
-  <!-- TIME-OFF REQUESTS -->
-  <div class="card" id="timeoff-card">
-    <h2>Time-Off Requests</h2>
-    <div class="settings-row">
-      <div class="field">
-        <label>Person</label>
-        <select id="to-person">
-          <option value="">Select person…</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>From</label>
-        <input type="date" id="to-start">
-      </div>
-      <div class="field">
-        <label>To (leave blank for single day)</label>
-        <input type="date" id="to-end">
-      </div>
-      <button class="btn btn-secondary" onclick="addTimeOff()">+ Add Request</button>
-    </div>
-    <div id="timeoff-list" style="margin-top:12px">
-      <p style="color:#888;font-size:0.8rem">No requests added.</p>
-    </div>
-  </div>
-
   <!-- MASTER SCHEDULE -->
   <div class="card" id="saves-card">
     <h2>Master Schedule <span style="font-size:0.72rem;font-weight:400;color:#888;text-transform:none;letter-spacing:0">— the single live schedule your whole team works from</span></h2>
@@ -430,31 +380,6 @@
       <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-bottom:6px">Recent Activity</p>
       <div id="audit-log-list"></div>
     </div>
-  </div>
-
-  <!-- RULES REFERENCE -->
-  <div class="card" id="rules-card">
-    <h2>Rules Reference</h2>
-    <table class="rules-table">
-      <thead>
-        <tr><th>ID</th><th>Priority</th><th>Rule</th></tr>
-      </thead>
-      <tbody>
-        <tr class="rule-hard"><td>R1</td><td>Hard</td><td>Min 2 people scheduled every day, including weekends</td></tr>
-        <tr class="rule-hard"><td>R2</td><td>Hard</td><td>Post on-call: next working day must start at 10 AM ET or later</td></tr>
-        <tr class="rule-hard"><td>R3</td><td>Hard</td><td>On-call shift must not be immediately followed by a day off</td></tr>
-        <tr class="rule-hard"><td>R4</td><td>Hard</td><td>Max 2 people scheduled on any Saturday or Sunday</td></tr>
-        <tr class="rule-hard"><td>R5</td><td>Hard</td><td>Every person must have exactly 13–14 days off in the period</td></tr>
-        <tr class="rule-soft"><td>R6</td><td>Soft</td><td>Max 2 consecutive on-call nights per person</td></tr>
-        <tr class="rule-soft"><td>R7</td><td>Soft</td><td>Max 2 consecutive days off per person</td></tr>
-        <tr class="rule-soft"><td>R8</td><td>Soft</td><td>Max 5 consecutive working days (one exception per person per period as last resort)</td></tr>
-        <tr class="rule-soft"><td>R9</td><td>Soft</td><td>On-call assignment should have a valid next-day swap candidate; fall back to bumping start to 10 AM</td></tr>
-        <tr class="rule-soft"><td>R10</td><td>Soft</td><td>On-call person should not start at 8 or 9 AM the same day they are on call</td></tr>
-        <tr class="rule-fair"><td>F1</td><td>Fairness</td><td>Minimize and evenly distribute weekend days worked across the team</td></tr>
-        <tr class="rule-fair"><td>F2</td><td>Fairness</td><td>Weekend day caps: Ali≤3, Emily≤3, Josh≤5, Izzy≤6, Kayla≤6, Holly≤6, Bryan≤6, Jacqueline=0</td></tr>
-        <tr class="rule-fair"><td>F3</td><td>Fairness</td><td>Josh: max 4 on-call shifts total</td></tr>
-      </tbody>
-    </table>
   </div>
 
   <!-- CONTROLS + LEGEND -->
@@ -537,6 +462,82 @@
   <div class="card hidden" id="weekend-card">
     <h2>Weekend Days Tracker</h2>
     <table id="weekend-table"></table>
+  </div>
+
+
+  <!-- TRAINING BLOCKS -->
+  <div class="card" id="training-card">
+    <h2>Training Blocks <span style="font-size:0.72rem;font-weight:400;color:#888;text-transform:none;letter-spacing:0">— person is unavailable; shows as TRAIN on schedule</span></h2>
+    <div class="settings-row">
+      <div class="field">
+        <label>Person</label>
+        <select id="tr-person">
+          <option value="">Select person…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>From</label>
+        <input type="date" id="tr-start">
+      </div>
+      <div class="field">
+        <label>To</label>
+        <input type="date" id="tr-end">
+      </div>
+      <button class="btn btn-secondary" onclick="addTraining()">+ Add Training Block</button>
+    </div>
+    <div id="training-list" style="margin-top:12px">
+      <p style="color:#888;font-size:0.8rem">No training blocks added.</p>
+    </div>
+  </div>
+
+  <!-- TIME-OFF REQUESTS -->
+  <div class="card" id="timeoff-card">
+    <h2>Time-Off Requests</h2>
+    <div class="settings-row">
+      <div class="field">
+        <label>Person</label>
+        <select id="to-person">
+          <option value="">Select person…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>From</label>
+        <input type="date" id="to-start">
+      </div>
+      <div class="field">
+        <label>To (leave blank for single day)</label>
+        <input type="date" id="to-end">
+      </div>
+      <button class="btn btn-secondary" onclick="addTimeOff()">+ Add Request</button>
+    </div>
+    <div id="timeoff-list" style="margin-top:12px">
+      <p style="color:#888;font-size:0.8rem">No requests added.</p>
+    </div>
+  </div>
+
+  <!-- RULES REFERENCE -->
+  <div class="card" id="rules-card">
+    <h2>Rules Reference</h2>
+    <table class="rules-table">
+      <thead>
+        <tr><th>ID</th><th>Priority</th><th>Rule</th></tr>
+      </thead>
+      <tbody>
+        <tr class="rule-hard"><td>R1</td><td>Hard</td><td>Min 2 people scheduled every day, including weekends</td></tr>
+        <tr class="rule-hard"><td>R2</td><td>Hard</td><td>Post on-call: next working day must start at 10 AM ET or later</td></tr>
+        <tr class="rule-hard"><td>R3</td><td>Hard</td><td>On-call shift must not be immediately followed by a day off</td></tr>
+        <tr class="rule-hard"><td>R4</td><td>Hard</td><td>Max 2 people scheduled on any Saturday or Sunday</td></tr>
+        <tr class="rule-hard"><td>R5</td><td>Hard</td><td>Every person must have exactly 13–14 days off in the period</td></tr>
+        <tr class="rule-soft"><td>R6</td><td>Soft</td><td>Max 2 consecutive on-call nights per person</td></tr>
+        <tr class="rule-soft"><td>R7</td><td>Soft</td><td>Max 2 consecutive days off per person</td></tr>
+        <tr class="rule-soft"><td>R8</td><td>Soft</td><td>Max 5 consecutive working days (one exception per person per period as last resort)</td></tr>
+        <tr class="rule-soft"><td>R9</td><td>Soft</td><td>On-call assignment should have a valid next-day swap candidate; fall back to bumping start to 10 AM</td></tr>
+        <tr class="rule-soft"><td>R10</td><td>Soft</td><td>On-call person should not start at 8 or 9 AM the same day they are on call</td></tr>
+        <tr class="rule-fair"><td>F1</td><td>Fairness</td><td>Minimize and evenly distribute weekend days worked across the team</td></tr>
+        <tr class="rule-fair"><td>F2</td><td>Fairness</td><td>Weekend day caps: Ali≤3, Emily≤3, Josh≤5, Izzy≤6, Kayla≤6, Holly≤6, Bryan≤6, Jacqueline=0</td></tr>
+        <tr class="rule-fair"><td>F3</td><td>Fairness</td><td>Josh: max 4 on-call shifts total</td></tr>
+      </tbody>
+    </table>
   </div>
 
 </main>
