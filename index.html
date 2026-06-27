@@ -221,6 +221,14 @@
   .schedule-locked .shift-sel, .schedule-locked .oncall-sel { pointer-events:none; appearance:none; -webkit-appearance:none; padding-right:0; }
   .btn-lock-active { background:var(--red) !important; color:white !important; }
 
+  /* Today row highlight */
+  tr.row-today td.col-date { background: #fffbeb !important; border-left: 3px solid var(--gold) !important; }
+  tr.row-today td.col-day  { background: #fffbeb !important; }
+
+  /* Today banner chips */
+  .today-person { background:#f0f9ff; border:1px solid #bae6fd; border-radius:999px; padding:3px 10px; font-size:0.78rem; font-weight:600; display:inline-flex; align-items:center; gap:5px; }
+  .today-shift  { font-size:0.7rem; color:#0369a1; font-weight:700; }
+
   /* Pin */
   .pin-btn { background:none; border:none; cursor:pointer; font-size:0.7rem; padding:0 2px 0 0; opacity:0.2; line-height:1; vertical-align:middle; }
   .pin-btn:hover { opacity:0.8; }
@@ -391,6 +399,7 @@
       <button class="btn btn-secondary" id="sheets-btn"   onclick="copyForSheets()"     disabled>📋 Copy for Sheets</button>
       <button class="btn btn-secondary" id="pdf-btn"      onclick="exportPDF()"         disabled>🖨 Print / PDF</button>
       <button class="btn btn-secondary" id="card-view-btn" onclick="toggleCardView()"   disabled>📱 Card View</button>
+      <button class="btn btn-secondary" id="today-btn"     onclick="scrollToToday()"    disabled>📍 Today</button>
       <div class="field" style="margin-bottom:0">
         <select id="view-filter" onchange="setViewFilter(this.value)" style="border:1px solid #d0d5dd;border-radius:6px;padding:7px 10px;font-size:0.85rem;outline:none;">
           <option value="">👥 Full Team View</option>
@@ -438,6 +447,24 @@
   <!-- LOCKED BANNER -->
   <div id="locked-banner" style="display:none;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:10px 18px;font-size:0.85rem;color:#991b1b;font-weight:600">
     🔒 Schedule is locked — view only. Contact Josh to request changes.
+  </div>
+
+  <!-- TODAY BANNER -->
+  <div class="card hidden" id="today-banner">
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+      <div style="flex-shrink:0">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:2px">Today</div>
+        <div id="today-date-label" style="font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight:800;color:var(--navy)"></div>
+      </div>
+      <div style="flex:1;min-width:180px">
+        <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:6px">On Shift</div>
+        <div id="today-working" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+      <div style="flex-shrink:0">
+        <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:4px">On Call Tonight</div>
+        <div id="today-oncall"></div>
+      </div>
+    </div>
   </div>
 
   <!-- SCHEDULE GRID -->
@@ -981,6 +1008,7 @@ async function loadMaster() {
     document.getElementById('pdf-btn').disabled      = false;
     document.getElementById('cal-btn').disabled        = false;
     document.getElementById('card-view-btn').disabled  = false;
+    document.getElementById('today-btn').disabled       = false;
     document.getElementById('validation-out').innerHTML = '';
     masterLoaded = true;
     hasUnsavedChanges = staleLeaveCleaned;
@@ -1905,6 +1933,34 @@ function setViewFilter(val) {
 // ============================================================
 // RENDER TABLE
 // ============================================================
+function renderTodayBanner() {
+  const banner = document.getElementById('today-banner');
+  if (!banner || !schedule || !schedule.length) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const day = schedule.find(d => d.date === today);
+  if (!day) { banner.classList.add('hidden'); return; }
+  banner.classList.remove('hidden');
+
+  document.getElementById('today-date-label').textContent = fmtDate(today) + ' · ' + dow(today);
+
+  const working = NAMES.filter(n => {
+    const h = day.assignments[n];
+    return h !== null && h !== undefined && h !== 'LEAVE';
+  }).map(n => {
+    const h = day.assignments[n];
+    const shiftLabel = typeof h === 'number' ? SHIFT_LABEL[h] : h;
+    return `<span class="today-person">${n}<span class="today-shift">${shiftLabel}</span></span>`;
+  });
+  document.getElementById('today-working').innerHTML = working.length
+    ? working.join('')
+    : '<span style="color:#999;font-size:0.82rem">No one scheduled</span>';
+
+  const ocEl = document.getElementById('today-oncall');
+  ocEl.innerHTML = day.onCall
+    ? `<span style="font-weight:700;font-size:0.9rem;color:#92400e;background:#fffbeb;border:1px solid #fbbf24;border-radius:999px;padding:3px 14px;display:inline-block">${day.onCall}</span>`
+    : '<span style="color:#999;font-size:0.82rem">None assigned</span>';
+}
+
 function scrollToToday() {
   const today = new Date().toISOString().slice(0, 10);
   const row = document.querySelector(`#schedule-table tr[data-date="${today}"]`);
@@ -1932,12 +1988,14 @@ function renderTable() {
   html += '<th>On-Call</th><th>Coverage</th><th>Notes</th><th>Programs Running</th>';
   html += '</tr></thead><tbody>';
 
+  const todayStr = new Date().toISOString().slice(0, 10);
   schedule.forEach((day, di) => {
     const isPinned = !day.preseason && !!pinnedDays[day.date];
     const classes = [];
-    if (isWknd(day.date)) classes.push('weekend');
-    if (day.preseason)    classes.push('preseason');
-    if (isPinned)         classes.push('row-pinned');
+    if (isWknd(day.date))       classes.push('weekend');
+    if (day.preseason)          classes.push('preseason');
+    if (isPinned)               classes.push('row-pinned');
+    if (day.date === todayStr)  classes.push('row-today');
     html += `<tr data-date="${day.date}"${classes.length ? ` class="${classes.join(' ')}"` : ''}>`;
     if (!day.preseason) {
       const unpinBtn = isPinned ? `<button class="unpin-btn" onclick="unpinDay(${di})" title="Unpin this day">✕</button>` : '';
@@ -2049,6 +2107,7 @@ function renderTable() {
   html += '</tbody>';
   tbl.innerHTML = html;
   applyLockState();
+  renderTodayBanner();
 }
 
 function cellChange(di, name, val) {
