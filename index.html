@@ -206,6 +206,17 @@
 
   .hidden { display: none !important; }
 
+  /* Collapsible cards (Settings / Master Schedule) */
+  .card h2.collapsible { cursor: pointer; user-select: none; justify-content: space-between; }
+  .card h2.collapsible .chevron { font-size: 0.7rem; color: #94a3b8; transition: transform .15s; margin-left: auto; }
+  .card.collapsed .card-body-wrap { display: none; }
+  .card.collapsed h2.collapsible .chevron { transform: rotate(-90deg); }
+  .card.collapsed h2 { margin-bottom: 0; }
+
+  /* Toolbar overflow (mobile) */
+  #toolbar-more-btn { display: none; }
+  #toolbar-overflow { display: contents; }
+
   /* Master schedule status */
   .master-status { background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:11px 16px; display:flex; align-items:center; gap:12px; font-size:0.85rem; }
   .master-status.none { background:#f8fafc; border-color:var(--border); }
@@ -313,6 +324,22 @@
     .controls-row { gap: 6px; }
     .legend { display: none; }
     .table-scroll { max-height: 65vh; overflow: auto; }
+
+    /* Toolbar: collapse secondary actions behind a "More" toggle */
+    #toolbar-more-btn { display: inline-flex; }
+    #toolbar-overflow { display: none; flex-basis: 100%; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    #toolbar-overflow.open { display: flex; }
+
+    /* Sticky Date/Day columns so they stay visible while scrolling the wide table horizontally */
+    #schedule-table th.col-date, #schedule-table td.col-date {
+      position: sticky; left: 0; z-index: 3; min-width: 88px; width: 88px;
+      background: #fff; box-shadow: 2px 0 4px rgba(0,0,0,.06);
+    }
+    #schedule-table th.col-day, #schedule-table td.col-day {
+      position: sticky; left: 88px; z-index: 3; background: #fff;
+      box-shadow: 2px 0 4px rgba(0,0,0,.06);
+    }
+    #schedule-table th.col-date, #schedule-table th.col-day { z-index: 4; }
   }
 </style>
 </head>
@@ -328,6 +355,18 @@
       <option value="">Select your name…</option>
     </select>
     <button onclick="confirmName()" class="btn btn-success" style="width:100%;padding:10px">Continue →</button>
+  </div>
+</div>
+
+<!-- HISTORY MODAL -->
+<div id="history-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px);">
+  <div style="background:white;border-radius:14px;padding:28px 32px;max-width:700px;width:95%;max-height:82vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,0.3);border-top:4px solid #F9C112;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <h3 style="font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#1e293b;margin:0">Save History</h3>
+      <button onclick="closeHistory()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#94a3b8;line-height:1">✕</button>
+    </div>
+    <p style="font-size:0.8rem;color:#94a3b8;margin-bottom:16px">Last 20 saves. Click Restore to roll back to any version.</p>
+    <div id="history-list"><p style="color:#888;font-size:0.85rem">Loading history...</p></div>
   </div>
 </div>
 
@@ -348,56 +387,56 @@
 <main>
 
   <!-- SETTINGS -->
-  <div class="card">
-    <h2>Settings</h2>
-    <div class="settings-row">
-      <div class="field">
-        <label>Start Date</label>
-        <input type="date" id="start-date" value="2026-05-19">
+  <div class="card" id="settings-card">
+    <h2 class="collapsible" onclick="toggleSection('settings-card')">Settings <span class="chevron">▾</span></h2>
+    <div class="card-body-wrap">
+      <div class="settings-row">
+        <div class="field">
+          <label>Start Date</label>
+          <input type="date" id="start-date" value="2026-05-19">
+        </div>
+        <div class="field">
+          <label>End Date</label>
+          <input type="date" id="end-date" value="2026-08-10">
+        </div>
+        <div class="field">
+          <label>Max Staff / Day</label>
+          <select id="max-staff">
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7" selected>7</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="initAndGenerate()">Generate Schedule →</button>
       </div>
-      <div class="field">
-        <label>End Date</label>
-        <input type="date" id="end-date" value="2026-08-10">
-      </div>
-      <div class="field">
-        <label>Max Staff / Day</label>
-        <select id="max-staff">
-          <option value="5">5</option>
-          <option value="6">6</option>
-          <option value="7" selected>7</option>
-        </select>
-      </div>
-      <button class="btn btn-primary" onclick="initAndGenerate()">Generate Schedule →</button>
     </div>
   </div>
 
   <!-- MASTER SCHEDULE -->
   <div class="card" id="saves-card">
-    <h2>Master Schedule <span style="font-size:0.72rem;font-weight:400;color:#888;text-transform:none;letter-spacing:0">— the single live schedule your whole team works from</span></h2>
-    <div id="master-status" class="master-status none">
-      <span style="color:#888;font-size:0.82rem">No master schedule published yet. Generate a schedule and click "Publish as Master".</span>
-    </div>
-    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-success"   id="publish-master-btn" onclick="publishAsMaster()"      disabled>📌 Publish as Master</button>
-      <button class="btn btn-primary"   id="save-changes-btn"   onclick="saveChangesToMaster()"  style="display:none" disabled>💾 Save Changes to Master</button>
-      <button class="btn btn-secondary" id="undo-save-btn"      onclick="undoLastSave()"         style="display:none">↩ Undo Last Save</button>
-      <button class="btn btn-secondary"                         onclick="loadMaster()"           style="font-size:0.8rem">↺ Reload from Master</button>
-      <button class="btn btn-secondary" id="lock-btn"           onclick="toggleLock()"           style="display:none;margin-left:auto">🔒 Lock Schedule</button>
-    </div>
-    <div id="audit-log" style="margin-top:14px;display:none">
-      <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-bottom:6px">Recent Activity</p>
-      <div id="audit-log-list"></div>
+    <h2 class="collapsible" onclick="toggleSection('saves-card')">Master Schedule <span style="font-size:0.72rem;font-weight:400;color:#888;text-transform:none;letter-spacing:0">— the single live schedule your whole team works from</span> <span class="chevron">▾</span></h2>
+    <div class="card-body-wrap">
+      <div id="master-status" class="master-status none">
+        <span style="color:#888;font-size:0.82rem">No master schedule published yet. Generate a schedule and click "Publish as Master".</span>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-success"   id="publish-master-btn" onclick="publishAsMaster()"      disabled>📌 Publish as Master</button>
+        <button class="btn btn-primary"   id="save-changes-btn"   onclick="saveChangesToMaster()"  style="display:none" disabled>💾 Save Changes to Master</button>
+        <button class="btn btn-secondary" id="undo-save-btn"      onclick="undoLastSave()"         style="display:none">↩ Undo Last Save</button>
+        <button class="btn btn-secondary" id="history-btn"        onclick="showHistory()"          style="display:none">🕐 History</button>
+        <button class="btn btn-secondary"                         onclick="loadMaster()"           style="font-size:0.8rem">↺ Reload from Master</button>
+        <button class="btn btn-secondary" id="lock-btn"           onclick="toggleLock()"           style="display:none;margin-left:auto">🔒 Lock Schedule</button>
+      </div>
+      <div id="audit-log" style="margin-top:14px;display:none">
+        <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-bottom:6px">Recent Activity</p>
+        <div id="audit-log-list"></div>
+      </div>
     </div>
   </div>
 
   <!-- CONTROLS + LEGEND -->
   <div class="card hidden" id="controls-card">
     <div class="controls-row">
-      <button class="btn btn-primary" onclick="generateSchedule()">⚡ Auto-Generate</button>
-      <button class="btn btn-secondary" id="validate-btn" onclick="validateSchedule()" disabled>✓ Validate Rules</button>
-      <button class="btn btn-success"   id="export-btn"   onclick="exportCSV()"         disabled>↓ Export CSV</button>
-      <button class="btn btn-secondary" id="sheets-btn"   onclick="copyForSheets()"     disabled>📋 Copy for Sheets</button>
-      <button class="btn btn-secondary" id="pdf-btn"      onclick="exportPDF()"         disabled>🖨 Print / PDF</button>
       <button class="btn btn-secondary" id="card-view-btn" onclick="toggleCardView()"   disabled>📱 Card View</button>
       <button class="btn btn-secondary" id="today-btn"     onclick="scrollToToday()"    disabled>📍 Today</button>
       <div class="field" style="margin-bottom:0">
@@ -405,12 +444,7 @@
           <option value="">👥 Full Team View</option>
         </select>
       </div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <select id="cal-person" style="border:1px solid #d0d5dd;border-radius:6px;padding:7px 10px;font-size:0.85rem;outline:none;">
-          <option value="">Person…</option>
-        </select>
-        <button class="btn btn-secondary" id="cal-btn" onclick="exportCalendarForSelected()" disabled>📅 Export to Calendar</button>
-      </div>
+      <button class="btn btn-secondary" id="toolbar-more-btn" onclick="toggleToolbarOverflow()">⋯ More</button>
       <div class="spacer"></div>
       <div class="legend">
         <span style="font-size:0.75rem;font-weight:700;color:#555">Shifts:</span>
@@ -424,6 +458,19 @@
         <div class="legend-item"><div class="legend-swatch" style="background:#fef3c7;border:1px solid #fcd34d"></div>Training</div>
         <div class="legend-item"><div class="legend-swatch" style="background:#e0f2fe;border:1px solid #7dd3fc"></div>Field</div>
         <div class="legend-item"><div class="legend-swatch" style="background:#fff9e6;border:1px solid #fde68a"></div>On-Call</div>
+      </div>
+      <div id="toolbar-overflow">
+        <button class="btn btn-primary" onclick="generateSchedule()">⚡ Auto-Generate</button>
+        <button class="btn btn-secondary" id="validate-btn" onclick="validateSchedule()" disabled>✓ Validate Rules</button>
+        <button class="btn btn-success"   id="export-btn"   onclick="exportCSV()"         disabled>↓ Export CSV</button>
+        <button class="btn btn-secondary" id="sheets-btn"   onclick="copyForSheets()"     disabled>📋 Copy for Sheets</button>
+        <button class="btn btn-secondary" id="pdf-btn"      onclick="exportPDF()"         disabled>🖨 Print / PDF</button>
+        <div id="cal-person-group" style="display:flex;align-items:center;gap:6px">
+          <select id="cal-person" style="border:1px solid #d0d5dd;border-radius:6px;padding:7px 10px;font-size:0.85rem;outline:none;">
+            <option value="">Person…</option>
+          </select>
+          <button class="btn btn-secondary" id="cal-btn" onclick="exportCalendarForSelected()" disabled>📅 Export to Calendar</button>
+        </div>
       </div>
     </div>
     <div id="validation-out"></div>
@@ -482,13 +529,17 @@
   <!-- STATS -->
   <div class="card hidden" id="stats-card">
     <h2>Summary Stats</h2>
-    <table id="stats-table"></table>
+    <div class="table-scroll" style="max-height:none">
+      <table id="stats-table"></table>
+    </div>
   </div>
 
   <!-- WEEKEND TRACKER -->
   <div class="card hidden" id="weekend-card">
     <h2>Weekend Days Tracker</h2>
-    <table id="weekend-table"></table>
+    <div class="table-scroll" style="max-height:none">
+      <table id="weekend-table"></table>
+    </div>
   </div>
 
 
@@ -1017,6 +1068,7 @@ async function loadMaster() {
     updateMasterStatus(data);
     updateSaveChangesBtn();
     updateUndoBtn();
+    updateHistoryBtn();
     applyLockState();
     renderAuditLog(data.auditLog);
     startMasterListener();
@@ -1060,11 +1112,19 @@ async function publishMaster(requireConfirm) {
     // a reload before the server has confirmed the write.
     lastMasterData = data;
     await db.collection('schedules').doc('master').set(data);
+    // Write the outgoing version to history (non-blocking — don't fail the save if this errors)
+    if (prevMasterData?.schedule) {
+      db.collection('schedules').doc('master').collection('history')
+        .doc(String(new Date(prevMasterData.savedAt).getTime()))
+        .set({ savedAt: prevMasterData.savedAt, savedBy: prevMasterData.savedBy, schedule: prevMasterData.schedule, days: prevMasterData.days })
+        .catch(e => console.warn('History write failed:', e));
+    }
     masterLoaded = true;
     hasUnsavedChanges = false;
     updateMasterStatus(data);
     updateSaveChangesBtn();
     updateUndoBtn();
+    updateHistoryBtn();
     renderAuditLog(auditLog);
     toast(requireConfirm ? 'Published as master — your whole team can now see it.' : 'Changes saved to master.');
   } catch(e) {
@@ -2610,6 +2670,92 @@ function updateUndoBtn() {
   if (btn) btn.style.display = lastMasterData?.previousVersion ? '' : 'none';
 }
 
+function updateHistoryBtn() {
+  const btn = document.getElementById('history-btn');
+  if (btn) btn.style.display = masterLoaded ? '' : 'none';
+}
+
+// ============================================================
+// SAVE HISTORY
+// ============================================================
+let _historyDocs = {};
+
+async function showHistory() {
+  const modal = document.getElementById('history-modal');
+  modal.style.display = 'flex';
+  const list = document.getElementById('history-list');
+  list.innerHTML = '<p style="color:#888;font-size:0.85rem">Loading history...</p>';
+  try {
+    const snap = await db.collection('schedules').doc('master').collection('history')
+      .orderBy('savedAt', 'desc').limit(20).get();
+    if (snap.empty) {
+      list.innerHTML = '<p style="color:#888;font-size:0.85rem">No history yet — it starts recording from the next save.</p>';
+      return;
+    }
+    _historyDocs = {};
+    snap.docs.forEach(d => { _historyDocs[d.id] = d.data(); });
+    list.innerHTML = snap.docs.map(doc => {
+      const h = doc.data();
+      const t = new Date(h.savedAt).toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' });
+      const changed = getScheduleDiff(h.schedule, schedule);
+      const diffHtml = changed.length === 0
+        ? '<span style="font-size:0.76rem;color:#22c55e">identical to current</span>'
+        : `<span style="font-size:0.76rem;color:#f59e0b">differs for: ${changed.join(', ')}</span>`;
+      return `<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #f1f5f9">
+        <div style="flex:1;min-width:0">
+          <span style="font-weight:700;font-size:0.88rem">${h.savedBy || 'Unknown'}</span>
+          <span style="color:#64748b;font-size:0.82rem;margin-left:8px">${t}</span>
+          <div style="margin-top:3px">${diffHtml}</div>
+        </div>
+        <button onclick="restoreFromHistory('${doc.id}')" class="btn btn-secondary" style="font-size:0.78rem;padding:5px 12px;white-space:nowrap">Restore</button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<p style="color:#ef4444;font-size:0.85rem">Failed to load history: ${e.message}</p>`;
+  }
+}
+
+function closeHistory() {
+  document.getElementById('history-modal').style.display = 'none';
+}
+
+function getScheduleDiff(oldSched, newSched) {
+  if (!oldSched || !newSched) return [];
+  const changed = new Set();
+  const newMap = Object.fromEntries(newSched.map(d => [d.date, d]));
+  oldSched.forEach(od => {
+    const nd = newMap[od.date];
+    if (!nd) return;
+    NAMES.forEach(n => {
+      if ((od.assignments?.[n] ?? null) !== (nd.assignments?.[n] ?? null)) changed.add(n);
+    });
+  });
+  return [...changed];
+}
+
+async function restoreFromHistory(docId) {
+  const h = _historyDocs[docId];
+  if (!h) return;
+  const t = new Date(h.savedAt).toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  const by = h.savedBy ? ` by ${h.savedBy}` : '';
+  if (!confirm(`Restore the version from ${t}${by}?\n\nThis will replace the current master schedule. The current version will be saved to history first.`)) return;
+  try {
+    closeHistory();
+    // Save current as a history entry before overwriting
+    if (lastMasterData?.schedule) {
+      db.collection('schedules').doc('master').collection('history')
+        .doc(String(new Date(lastMasterData.savedAt).getTime()))
+        .set({ savedAt: lastMasterData.savedAt, savedBy: lastMasterData.savedBy, schedule: lastMasterData.schedule, days: lastMasterData.days })
+        .catch(e => console.warn('History write failed:', e));
+    }
+    await db.collection('schedules').doc('master').set(h);
+    await loadMaster();
+    toast(`Restored version from ${t}.`);
+  } catch(e) {
+    toast('Restore failed: ' + e.message, true);
+  }
+}
+
 // ============================================================
 // SCHEDULE LOCK
 // ============================================================
@@ -2665,13 +2811,18 @@ function toggleCardView() {
   cardViewActive = !cardViewActive;
   const card = document.getElementById('card-view-card');
   const btn  = document.getElementById('card-view-btn');
+  // Card View has its own person-picker + calendar export, so hide the
+  // toolbar's duplicate of the same control while it's showing.
+  const calGroup = document.getElementById('cal-person-group');
   if (cardViewActive) {
     card.classList.remove('hidden');
     btn.textContent = '📋 Table View';
+    if (calGroup) calGroup.classList.add('hidden');
     initCardView();
   } else {
     card.classList.add('hidden');
     btn.textContent = '📱 Card View';
+    if (calGroup) calGroup.classList.remove('hidden');
   }
 }
 
@@ -2830,9 +2981,28 @@ document.addEventListener('DOMContentLoaded', () => {
   loadTrainingFromStorage();
   renderTrainingList();
   loadPinnedDays();
+  initMobileCollapse();
   // Auto-load the master schedule from Firestore
   loadMaster();
 });
+
+// ============================================================
+// COLLAPSIBLE CARDS + TOOLBAR OVERFLOW (mobile decluttering)
+// ============================================================
+function toggleSection(cardId) {
+  document.getElementById(cardId).classList.toggle('collapsed');
+}
+
+function toggleToolbarOverflow() {
+  document.getElementById('toolbar-overflow').classList.toggle('open');
+}
+
+function initMobileCollapse() {
+  if (window.matchMedia('(max-width: 700px)').matches) {
+    document.getElementById('settings-card').classList.add('collapsed');
+    document.getElementById('saves-card').classList.add('collapsed');
+  }
+}
 
 let _tt;
 function toast(msg, err=false) {
