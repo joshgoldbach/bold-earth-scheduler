@@ -415,10 +415,10 @@
   <!-- MASTER SCHEDULE -->
   <div class="card" id="saves-card">
     <h2 class="collapsible" onclick="toggleSection('saves-card')">Master Schedule <span style="font-size:0.72rem;font-weight:400;color:#888;text-transform:none;letter-spacing:0">— the single live schedule your whole team works from</span> <span class="chevron">▾</span></h2>
+    <div id="master-status" class="master-status none">
+      <span style="color:#888;font-size:0.82rem">No master schedule published yet. Generate a schedule and click "Publish as Master".</span>
+    </div>
     <div class="card-body-wrap">
-      <div id="master-status" class="master-status none">
-        <span style="color:#888;font-size:0.82rem">No master schedule published yet. Generate a schedule and click "Publish as Master".</span>
-      </div>
       <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-success"   id="publish-master-btn" onclick="publishAsMaster()"      disabled>📌 Publish as Master</button>
         <button class="btn btn-primary"   id="save-changes-btn"   onclick="saveChangesToMaster()"  style="display:none" disabled>💾 Save Changes to Master</button>
@@ -428,7 +428,7 @@
         <button class="btn btn-secondary" id="lock-btn"           onclick="toggleLock()"           style="display:none;margin-left:auto">🔒 Lock Schedule</button>
       </div>
       <div id="audit-log" style="margin-top:14px;display:none">
-        <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-bottom:6px">Recent Activity</p>
+        <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#999;margin-bottom:6px">Recent Activity <span style="text-transform:none;font-weight:400;letter-spacing:0">— full log under History</span></p>
         <div id="audit-log-list"></div>
       </div>
     </div>
@@ -977,7 +977,7 @@ function renderAuditLog(log) {
   const list = document.getElementById('audit-log-list');
   if (!log || !log.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
-  list.innerHTML = [...log].reverse().map(e => {
+  list.innerHTML = [...log].reverse().slice(0, 3).map(e => {
     const t = new Date(e.savedAt).toLocaleString('en-US',
       { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
     return `<div class="audit-entry">
@@ -2998,10 +2998,10 @@ function toggleToolbarOverflow() {
 }
 
 function initMobileCollapse() {
-  if (window.matchMedia('(max-width: 700px)').matches) {
-    document.getElementById('settings-card').classList.add('collapsed');
-    document.getElementById('saves-card').classList.add('collapsed');
-  }
+  // Collapsed by default on every screen size — Settings and Master Schedule
+  // are set-once-and-forget, not something you need open to see the schedule.
+  document.getElementById('settings-card').classList.add('collapsed');
+  document.getElementById('saves-card').classList.add('collapsed');
 }
 
 let _tt;
