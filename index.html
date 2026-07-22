@@ -545,57 +545,62 @@
 
   <!-- TRAINING BLOCKS -->
   <div class="card" id="training-card">
-    <h2>Training Blocks <span style="font-size:0.72rem;font-weight:400;color:#888;text-transform:none;letter-spacing:0">— person is unavailable; shows as TRAIN on schedule</span></h2>
-    <div class="settings-row">
-      <div class="field">
-        <label>Person</label>
-        <select id="tr-person">
-          <option value="">Select person…</option>
-        </select>
+    <h2 class="collapsible" onclick="toggleSection('training-card')">Training Blocks <span style="font-size:0.72rem;font-weight:400;color:#888;text-transform:none;letter-spacing:0">— person is unavailable; shows as TRAIN on schedule</span> <span class="chevron">▾</span></h2>
+    <div class="card-body-wrap">
+      <div class="settings-row">
+        <div class="field">
+          <label>Person</label>
+          <select id="tr-person">
+            <option value="">Select person…</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>From</label>
+          <input type="date" id="tr-start">
+        </div>
+        <div class="field">
+          <label>To</label>
+          <input type="date" id="tr-end">
+        </div>
+        <button class="btn btn-secondary" onclick="addTraining()">+ Add Training Block</button>
       </div>
-      <div class="field">
-        <label>From</label>
-        <input type="date" id="tr-start">
+      <div id="training-list" style="margin-top:12px">
+        <p style="color:#888;font-size:0.8rem">No training blocks added.</p>
       </div>
-      <div class="field">
-        <label>To</label>
-        <input type="date" id="tr-end">
-      </div>
-      <button class="btn btn-secondary" onclick="addTraining()">+ Add Training Block</button>
-    </div>
-    <div id="training-list" style="margin-top:12px">
-      <p style="color:#888;font-size:0.8rem">No training blocks added.</p>
     </div>
   </div>
 
   <!-- TIME-OFF REQUESTS -->
   <div class="card" id="timeoff-card">
-    <h2>Time-Off Requests</h2>
-    <div class="settings-row">
-      <div class="field">
-        <label>Person</label>
-        <select id="to-person">
-          <option value="">Select person…</option>
-        </select>
+    <h2 class="collapsible" onclick="toggleSection('timeoff-card')">Time-Off Requests <span class="chevron">▾</span></h2>
+    <div class="card-body-wrap">
+      <div class="settings-row">
+        <div class="field">
+          <label>Person</label>
+          <select id="to-person">
+            <option value="">Select person…</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>From</label>
+          <input type="date" id="to-start">
+        </div>
+        <div class="field">
+          <label>To (leave blank for single day)</label>
+          <input type="date" id="to-end">
+        </div>
+        <button class="btn btn-secondary" onclick="addTimeOff()">+ Add Request</button>
       </div>
-      <div class="field">
-        <label>From</label>
-        <input type="date" id="to-start">
+      <div id="timeoff-list" style="margin-top:12px">
+        <p style="color:#888;font-size:0.8rem">No requests added.</p>
       </div>
-      <div class="field">
-        <label>To (leave blank for single day)</label>
-        <input type="date" id="to-end">
-      </div>
-      <button class="btn btn-secondary" onclick="addTimeOff()">+ Add Request</button>
-    </div>
-    <div id="timeoff-list" style="margin-top:12px">
-      <p style="color:#888;font-size:0.8rem">No requests added.</p>
     </div>
   </div>
 
   <!-- RULES REFERENCE -->
   <div class="card" id="rules-card">
-    <h2>Rules Reference</h2>
+    <h2 class="collapsible" onclick="toggleSection('rules-card')">Rules Reference <span class="chevron">▾</span></h2>
+    <div class="card-body-wrap">
     <table class="rules-table">
       <thead>
         <tr><th>ID</th><th>Priority</th><th>Rule</th></tr>
@@ -616,6 +621,7 @@
         <tr class="rule-fair"><td>F3</td><td>Fairness</td><td>Josh: max 4 on-call shifts total</td></tr>
       </tbody>
     </table>
+    </div>
   </div>
 
 </main>
@@ -2998,10 +3004,13 @@ function toggleToolbarOverflow() {
 }
 
 function initMobileCollapse() {
-  // Collapsed by default on every screen size — Settings and Master Schedule
-  // are set-once-and-forget, not something you need open to see the schedule.
+  // Collapsed by default on every screen size — these are set-once-and-forget
+  // or reference sections, not something you need open to see the schedule.
   document.getElementById('settings-card').classList.add('collapsed');
   document.getElementById('saves-card').classList.add('collapsed');
+  document.getElementById('training-card').classList.add('collapsed');
+  document.getElementById('timeoff-card').classList.add('collapsed');
+  document.getElementById('rules-card').classList.add('collapsed');
 }
 
 let _tt;
